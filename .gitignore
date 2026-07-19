@@ -12,6 +12,10 @@ playwright-report/
 *.log
 !doc/evidence/**/*.log
 
+# Python 字节码（scripts/ 下工作脚本产生）
+__pycache__/
+*.pyc
+
 # 编辑器/系统杂物
 .DS_Store
 Thumbs.db

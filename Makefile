@@ -38,4 +38,4 @@ bump:
 	python scripts/bump.py $(if $(MILESTONE),--milestone $(MILESTONE))
 
 evidence:
-	python scripts/evidence.py $(if $(SCEN),--scen $(SCEN)) $(if $(BUG),--bug $(BUG)) $(if $(REGRESS),--regress) $(if $(TEST),--test $(TEST)) $(if $(E2E),--e2e) $(if $(LINT),--lint) $(if $(SHOT),--shot $(SHOT)) $(if $(SPEC_REF),--spec-ref $(SPEC_REF))
+	python scripts/evidence.py $(if $(SCEN),--scen $(SCEN)) $(if $(BUG),--bug $(BUG)) $(if $(REGRESS),--regress) $(if $(TEST),--test $(TEST)) $(if $(E2E),--e2e) $(if $(DO_LINT),--lint) $(if $(SHOT),--shot $(SHOT)) $(if $(SPEC_REF),--spec-ref $(SPEC_REF))

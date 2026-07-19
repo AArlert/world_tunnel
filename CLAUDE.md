@@ -77,7 +77,7 @@ Windows 11 host：node 24 / npm 11 / GNU make 3.81（老版本，Makefile 只用
 | `make test [TEST=模式]` / `make e2e [TEST=模式]` | 单测 / Playwright，产 test-results/*.log |
 | `make lint` | eslint + tsc --noEmit，产 log |
 | `make regress` | 全量回归（lint+unit+e2e），产 regress_summary.txt |
-| `make evidence SCEN=<ID> TEST=<模式> [E2E=1] [LINT=1] [SHOT=路径]` | 从测试 log 机械生成证据并回填 testplan |
+| `make evidence SCEN=<ID> TEST=<模式> [E2E=1] [DO_LINT=1] [SHOT=路径]` | 从测试 log 机械生成证据并回填 testplan |
 | `make evidence BUG=<ID> ...` / `make evidence REGRESS=1` | 缺陷复验关单 / 归档回归总判定 |
 | `make bump [MILESTONE=M<n>]` / `make docs-check` / `make docs-archive` | 版本推进 / 文档守卫 / 滚动归档 |
 | `make pin-spec` | spec.md 修改后重新钉住 sha256 |
@@ -98,12 +98,15 @@ Windows 11 host：node 24 / npm 11 / GNU make 3.81（老版本，Makefile 只用
 
 - **没有测试 log 就没有 ✅**。证据一律 `make evidence` 机械生成（首行 = 可复跑命令）；**禁止手写证据文件**（脚本拒收 FAIL log）。
 - 汇报必须与 log 一致；测试没跑、跑挂了，如实写 ❌/⚠️，不许「应该能过」。
+- **✅ 的撤销**：任何角色不得自行降级他人登记的状态位；错误登记由 **orch 依 rev 书面裁决**撤销，须在 log.md 援引裁决记录（如「REV-003 §1」）。撤销时状态/证据/复跑三列一并回退，**不得顺手修改场景判据文字**——判据要改走 §7 路径。
+- **判据不得向实现看齐**：发现场景判据与实际所测不符时，默认补齐测试，而非把判据改小到与实现齐平。改判据前先问「改后是否有 spec 子句掉出全部场景之外」——会掉出的一律驳回（否则该子句因所在行呈 ✅ 而永不再被 `make next` 提示，静默蒸发）。
 
 ### 5.3 缺陷闭环 ★
 
 1. **登记**：发现问题先在 `doc/bugs.md` 登记——最小复现命令、现象、期望及 SPEC 依据。**禁止只在对话里口头传递**。复杂的开 `doc/bugs/<BUG-ID>.md` 详情页。
 2. **归属与修复**：orch 依 bugs 条目派单（实现问题→dev；测试自身问题→qa；spec 歧义→rev 仲裁）。修复者回填根因与修复 commit，置 FIX_READY，禁止自关。
 3. **复验关单**：qa 用登记的复现命令复跑 + 相关回归，`make evidence BUG=<ID> ...` 机械关单。**关单人 ≠ 修复人**。
+4. **流程/规则类缺陷的关单口径**（无自动化复现手段者，如派单调度、文档约定类）：复验证据为**独立 qa 出具的核对记录**（存 `doc/evidence/`，写明核对对象、逐条结论、遗留漏洞、署名），状态由 orch 依该记录置 CLOSED。**严禁挂一份与该缺陷无关的测试 log 冒充复验证据**——那比不关单更坏，会让证据链里混进查不出的假绿。适用边界严格限于**确实写不出复现命令**的缺陷；凡能写出复现命令的一律走上一条的机械关单，不得借此口径绕过测试证据。工具侧支持见 BUG-015。
 4. 上游 API 行为与 spec 不符 → 属 spec 缺陷，走 spec 修改路径（§7）。
 
 ## 6. Git 约定

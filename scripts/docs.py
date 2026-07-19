@@ -13,6 +13,8 @@ import re
 import sys
 from pathlib import Path
 
+from mdtable import MalformedRowError, split_row
+
 ROOT = Path(__file__).resolve().parent.parent
 DOC = ROOT / "doc"
 LOG_MAX_BLOCKS = 4
@@ -29,14 +31,22 @@ def read_version():
 
 
 def parse_table(path, min_cols):
-    """markdown 表 → 行列表（跳过表头与分隔行）。"""
+    """markdown 表 → 行列表（跳过表头与分隔行）。分列逻辑与 evidence.py 写入端共用
+    scripts/mdtable.py（BUG-003：读写两端列号契约须一致，不能各自裸切）。
+    畸形行（反引号未闭合、列数不足 min_cols）一律显式报错并中止，不静默跳过——
+    静默跳过会让 docs-check 对该行失去校验能力而不自知（BUG-005/BUG-009）。"""
     rows = []
-    for line in path.read_text(encoding="utf-8").splitlines():
+    for lineno, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
         if not line.strip().startswith("|"):
             continue
-        cells = [c.strip() for c in line.strip().strip("|").split("|")]
+        try:
+            cells = split_row(line)
+        except MalformedRowError as e:
+            sys.exit("%s 第 %d 行畸形，无法分列（%s）——先修正表格" % (path, lineno, e))
         if len(cells) < min_cols:
-            continue
+            sys.exit(
+                "%s 第 %d 行只有 %d 列，少于表结构约定的 %d 列，疑似畸形行（禁止静默跳过，先修正表格）"
+                % (path, lineno, len(cells), min_cols))
         if not cells[0] or set(cells[0]) <= set("-: ") or cells[0] in ("编号",):
             continue
         rows.append(cells)

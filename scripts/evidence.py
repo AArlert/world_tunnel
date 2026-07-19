@@ -15,6 +15,8 @@ import sys
 from datetime import date
 from pathlib import Path
 
+from mdtable import MalformedRowError, split_row
+
 ROOT = Path(__file__).resolve().parent.parent
 DOC = ROOT / "doc"
 OUT = ROOT / "test-results"
@@ -70,13 +72,39 @@ def write_record(rid, replay, log_path, spec_ref):
     return rec.relative_to(ROOT)
 
 
+# 场景描述含以下任一字样即视为声明了视觉/截图判据（BUG-008）。规则从简，只做子串匹配；
+# 如日后出现误判（例如描述提到"视觉"但并非截图判据），再细化为更精确的标记语法，勿改此处含糊了事。
+VISUAL_MARKERS = ("截图", "视觉")
+
+
+def scenario_needs_shot(path, rid):
+    """在 testplan.md 中定位场景行，判断其描述列（第 3 列）是否声明了视觉/截图判据。
+    找不到该行时返回 False——行不存在会在后续 backfill_table 里报错，此处不重复拦截。"""
+    for i, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+        if not line.strip().startswith("|"):
+            continue
+        try:
+            cells = split_row(line)
+        except MalformedRowError as e:
+            sys.exit("%s 第 %d 行畸形，无法分列（%s）——先修正表格" % (path.name, i, e))
+        if len(cells) > 2 and cells[0] == rid:
+            return any(m in cells[2] for m in VISUAL_MARKERS)
+    return False
+
+
 def backfill_table(path, rid, update_cells):
     """按行号定位 `| <rid> |` 行，替换指定列（列号→新值），其余保持原样。
-    列号契约与 docs.py 的读取端一致（testplan: 3状态/4证据/5复跑，bugs: 1状态/6复验），改表结构须两侧同步。"""
+    列号契约与 docs.py 的读取端一致（testplan: 3状态/4证据/5复跑，bugs: 1状态/6复验），改表结构须两侧同步。
+    只对以竖线开头的表格行做分列（split_row 对反引号未闭合的畸形行会显式报错，不应波及非表格行）。"""
     lines = path.read_text(encoding="utf-8").splitlines()
     for i, line in enumerate(lines):
-        cells = [c.strip() for c in line.strip().strip("|").split("|")]
-        if line.strip().startswith("|") and cells and cells[0] == rid:
+        if not line.strip().startswith("|"):
+            continue
+        try:
+            cells = split_row(line)
+        except MalformedRowError as e:
+            sys.exit("%s 第 %d 行畸形，无法分列（%s）——先修正表格" % (path.name, i + 1, e))
+        if cells and cells[0] == rid:
             if len(cells) <= max(update_cells):
                 sys.exit("%s 的 %s 行只有 %d 列，与脚本列号契约不符——先修表结构"
                          % (path.name, rid, len(cells)))
@@ -127,6 +155,9 @@ def main():
         log_path = ROOT / log_path
 
     rid = a.scen or a.bug
+    if a.scen and scenario_needs_shot(DOC / "testplan.md", rid) and not a.shot:
+        sys.exit("%s 场景描述声明了截图/视觉判据（含“截图”或“视觉”字样），"
+                 "未传 --shot 不能置 ✅（BUG-008）" % rid)
     rec = write_record(rid, replay, log_path, a.spec_ref)
     for shot in a.shot:
         src = ROOT / shot
@@ -145,9 +176,14 @@ def main():
         print("[evidence] %s → ✅  证据: %s" % (rid, rec))
     else:
         # 关单前置条件：修复commit 列（第 5 列）须已回填，否则 CLOSED 行会被 docs-check 拦截
-        for line in (DOC / "bugs.md").read_text(encoding="utf-8").splitlines():
-            cells = [c.strip() for c in line.strip().strip("|").split("|")]
-            if line.strip().startswith("|") and cells and cells[0] == rid:
+        for i, line in enumerate((DOC / "bugs.md").read_text(encoding="utf-8").splitlines(), 1):
+            if not line.strip().startswith("|"):
+                continue
+            try:
+                cells = split_row(line)
+            except MalformedRowError as e:
+                sys.exit("doc/bugs.md 第 %d 行畸形，无法分列（%s）——先修正表格" % (i, e))
+            if cells and cells[0] == rid:
                 if len(cells) > 5 and cells[5] in ("-", ""):
                     sys.exit("%s 的修复commit列未回填——先置 FIX_READY 并填修复 commit，再关单" % rid)
         ok = backfill_table(DOC / "bugs.md", rid,

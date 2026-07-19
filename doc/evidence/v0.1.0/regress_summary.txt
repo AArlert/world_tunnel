@@ -1,0 +1,6 @@
+make regress
+[regress] date: 2026-07-19T16:54:15
+lint: PASS (log: test-results/lint.log)
+unit: PASS (log: test-results/unit_all.log)
+e2e: PASS (log: test-results/e2e_all.log)
+[regress] RESULT: PASS (exit 0)
