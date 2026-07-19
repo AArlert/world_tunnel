@@ -1,3 +1,4 @@
+{"date": "2026-07-20", "version": "0.1.2", "milestone": "M1", "summary": "Git 约定补明「commit 即 bump」（每次提交伴随 x.y.z 递增，写入 CLAUDE.md §6）。余同 0.1.1：M2 未开卡，6 缺陷 OPEN"}
 {"date": "2026-07-20", "version": "0.1.1", "milestone": "M1", "summary": "工作流文档切片：CLAUDE.md 新增准则5「小步快跑」（切片闭环即 closeout+push）；去重2处、修§5.3编号重复；同步 BUG-004 漏改的 qa.md/evidence SKILL 参数 DO_LINT。M2 未开卡，6 缺陷 OPEN"}
 {"date": "2026-07-20", "version": "0.1.0", "milestone": "M1", "summary": "M1 地球仪完成：astro 天文+globe 渲染/shader+controls 交互三模块，spec 经 REV-002 仲裁升 v0.1（新增 SPEC-7.5），13 场景全 ✅，regress 全绿，rev 签核通过。修 6 条证据工具链失效缺陷；M1-07 曾因判据未真测被退回重做。5 条缺陷留 M2"}
 {"date": "2026-07-19", "version": "0.0.1", "milestone": "M0", "summary": "M0 基建完成：工作流+orch四角色调度+Vite/three.js骨架+测试链路+spec v0；REV-001 八角度审查整改后回归全绿，BUG-001 关单，tag v0.0.1"}
