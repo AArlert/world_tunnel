@@ -1,0 +1,3 @@
+#!/bin/sh
+# 本地软门禁（--no-verify 可跳过，但 docs-check 在 closeout 仍是硬条件）
+python scripts/docs.py --check || exit 1

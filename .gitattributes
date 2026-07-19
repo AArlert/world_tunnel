@@ -1,0 +1,9 @@
+# 统一 LF（Windows host / CI / 未来 macOS 打包机一致）
+* text=auto eol=lf
+
+# 二进制文件不做行尾处理
+*.jpg -text
+*.jpeg -text
+*.png -text
+*.webp -text
+*.ico -text

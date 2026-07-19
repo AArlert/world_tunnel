@@ -1,0 +1,18 @@
+# 依赖与构建产物
+node_modules/
+dist/
+*.local
+
+# 测试运行产物（证据例外见下）
+test-results/
+playwright-report/
+.vite/
+
+# 日志：只允许机械生成的证据入库
+*.log
+!doc/evidence/**/*.log
+
+# 编辑器/系统杂物
+.DS_Store
+Thumbs.db
+*.swp
