@@ -24,15 +24,15 @@ world_tunnel——个人专属新闻信息流地球仪 App。可交互 3D 地球
 任务卡里禁止粘贴其他实例的推理过程——只允许共享文件路径、SPEC 条目号、条目 ID。
 目的：切断共模错误传播（注意边界：隔离切不断同模型对同一 spec 的共同误读，所以歧义前置登记 + rev 锚定 spec 的审查同样重要）。
 
-档位选择省 token：机械改动低档（haiku）、常规编码中档（sonnet）、架构/shader/疑难调试/仲裁高档（opus，agents 默认）。
-**派单前用 skill `/dispatch` 组卡**；交付按各角色 md 的"交付汇报"固定格式回收。
+**派单前用 skill `/dispatch` 组卡**（档位选择与隔离自查见该 skill）；交付按各角色 md 的"交付汇报"固定格式回收。
 
-## 1. 行为准则（全局四条，所有角色适用，优先级最高）
+## 1. 行为准则（全局五条，所有角色适用，优先级最高）
 
 1. **先想后写**：显式陈述假设；多种解读并陈不默选；有更简单方案要说；不清楚就停下来问。
 2. **极简优先**：只写解决问题的最少代码；不写没被要求的功能/抽象/「灵活性」；不给不可能场景写错误处理。自问「资深工程师会说这过度设计吗」。
 3. **外科手术式改动**：只动必须动的行；不顺手改邻近代码/注释/格式；发现无关死代码只提不删；自己改动产生的孤儿 import/变量要清掉。每一行改动都应能追溯到需求。
 4. **目标驱动**：动手前把任务转成可验证判据（「修 bug」→「先写复现测试再修绿」）；多步任务先列步骤+每步验证方式；判据强了才能自主循环。
+5. **小步快跑**：按最小可闭环的功能切片推进——一个切片 = 一段可独立验证的活（测试可复跑、证据可登记）；切片闭环就走 `/closeout` 提交并 push，不把整个里程碑攒成一笔大提交。切不出验证边界的活，先回到第 4 条补出判据再动手。
 
 ## 2. 仓库结构
 
@@ -40,7 +40,7 @@ world_tunnel——个人专属新闻信息流地球仪 App。可交互 3D 地球
 doc/       spec.md（单一事实源）+ 记忆系统 + testplan.md + feature-matrix.md + bugs.md
            + design-prompt/（arch 产出）+ evidence/ + review/（rev 记录）+ archive/（默认不读）+ attachment/
 scripts/   机械工作脚本（docs.py / bump.py / evidence.py / regress.mjs），iverif-workflow kernel 适配版
-           （regress 用 Node：本机 Python 为 MSIX 容器版，子进程看不到 AppData 下的 Playwright 浏览器，见 BUG-001）
+           （regress 用 Node 不用 Python 的原因见 §4 与 BUG-001）
 .claude/   agents（arch/dev/qa/rev）与 skills（handover/dispatch/evidence/closeout）
 src/       astro/（天文纯函数）globe/（three.js 场景+shader）data/（GeoEvent+providers+scheduler）
            ui/（React 面板）store/（状态）
@@ -107,7 +107,7 @@ Windows 11 host：node 24 / npm 11 / GNU make 3.81（老版本，Makefile 只用
 2. **归属与修复**：orch 依 bugs 条目派单（实现问题→dev；测试自身问题→qa；spec 歧义→rev 仲裁）。修复者回填根因与修复 commit，置 FIX_READY，禁止自关。
 3. **复验关单**：qa 用登记的复现命令复跑 + 相关回归，`make evidence BUG=<ID> ...` 机械关单。**关单人 ≠ 修复人**。
 4. **流程/规则类缺陷的关单口径**（无自动化复现手段者，如派单调度、文档约定类）：复验证据为**独立 qa 出具的核对记录**（存 `doc/evidence/`，写明核对对象、逐条结论、遗留漏洞、署名），状态由 orch 依该记录置 CLOSED。**严禁挂一份与该缺陷无关的测试 log 冒充复验证据**——那比不关单更坏，会让证据链里混进查不出的假绿。适用边界严格限于**确实写不出复现命令**的缺陷；凡能写出复现命令的一律走上一条的机械关单，不得借此口径绕过测试证据。工具侧支持见 BUG-015。
-4. 上游 API 行为与 spec 不符 → 属 spec 缺陷，走 spec 修改路径（§7）。
+5. 上游 API 行为与 spec 不符 → 属 spec 缺陷，走 spec 修改路径（§7）。
 
 ## 6. Git 约定
 

@@ -16,7 +16,7 @@ model: opus
 ## 职责
 - 编码前先在 testplan.md 登记/更新场景行（编号 M<n>-xx、描述=激励+判据+SPEC 引用、状态 🔲）。
 - tests/（Vitest 单测）与 e2e/（Playwright）开发；测试必须真跑：`make test TEST=<模式>` / `make e2e`。
-- PASS 后机械登记：`make evidence SCEN=<ID> TEST=<模式> [E2E=1] [LINT=1] [SHOT=截图路径]`（脚本拒收 FAIL log，禁止手写证据）；视觉类场景必须附截图。
+- PASS 后机械登记：`make evidence SCEN=<ID> TEST=<模式> [E2E=1] [DO_LINT=1] [SHOT=截图路径]`（脚本拒收 FAIL log，禁止手写证据）；视觉类场景必须附截图。
 - 发现 mismatch：先自查测试自身；仍疑似实现/spec 问题 → doc/bugs.md 登记（最小复现命令、现象、期望及 SPEC 依据），状态 OPEN，交 orch 派单。**不许口头带过**。
 - 复验关单：对 FIX_READY 的 bug 用登记的复现命令复跑 + 相关回归，PASS 后 `make evidence BUG=<ID> TEST=<模式>` 机械关单。
 
