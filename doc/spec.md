@@ -12,6 +12,7 @@
 | 2026-07-20 | v0.2 | 路线图重排（决议 D1–D21 落地，提案 design-prompt/proposal-roadmap-v2.md，仲裁 REV-005 打回 K-1~K-4 后 REV-006 放行）：改 SPEC-1/2.1/2.4/3.1/3.2(重写)/3.3/5.4/5.5/6.3/8.1/8.4/8.5/§9 共 13 处；新增 SPEC-2.5/3.9/3.10/3.11/5.8/5.9/8.6/8.7/8.8 共 9 条；SPEC-7.4 正文不改、里程碑归属拆挂 FM-07(M2)+FM-14(M3) |
 | 2026-07-20 | v0.2.1 | SPEC-5.2 EONET 坐标降维规则（G-1，REV-007 §2 裁决）：非 Point geometry 取全部坐标点经纬度包围盒中心，Point 为退化情形；跨 ±180° 经线偏移列为已知限界 |
 | 2026-07-21 | v0.2.2 | G-2/G-3 字段映射 pin（提案 design-prompt/proposal-gdacs-ll2.md，REV-008 放行）：SPEC-5.3 全文替换（eventid 分组、Point 中心点包围盒坐标、字段来源实证、humanitarian 判类=eventtype∈{DR,FL}——原「人道响应字段」实测不存在被迫重写、UTC 解析陷阱）；SPEC-5.5 全文替换（端点换 mode=detailed、pad 坐标、urls 回落链、ts=net）。SPEC-6.3 清扫语义不在本次（BUG-018 独立路径） |
+| 2026-07-21 | v0.2.3 | 过期清扫语义与 severity 方向性（REV-009 两裁）：SPEC-6.3① 重写——过期基准改为 lastSeen（最后被 upsert 的墙钟时刻），ts 仅展示/排序，冷启动沿用持久化 lastSeen（BUG-018 spec 前置，提案 design-prompt/proposal-expiry-semantics.md）；SPEC-5.5 severity 子条补句——仅未来方向计入，net 已过去归 1 档（BUG-019） |
 
 ## 1. 产品概述
 
@@ -97,7 +98,7 @@
 - **SPEC-5.5 Launch Library 2 火箭发射** → category `launch`（M2：属 T1 自带坐标源，随首批 provider 接入）
   - `https://ll.thespacedevs.com/2.2.0/launch/upcoming/?limit=10&mode=detailed`，轮询 1800s（免费额 15 req/h，预算 ≤2 req/h；`mode=detailed` 仅增大单响应体，请求数不变仍 2 req/h）。改用 `mode=detailed` 因 `mode=list` 响应不含发射工位坐标。
   - 字段映射：`id=ll2:{results[].id}`；坐标取发射工位 `pad.latitude`/`pad.longitude`（字符串数值，parse 为 number）；title=`name`；summary=`mission.description`；urls 取 `infoURLs[].url` ∪ `vidURLs[].url`，二者皆空时回落自链 `url`（保证 urls≥1）；ts=`net`（T-0，ISO 含 `Z`，`Date.parse` 直接得 UTC）。
-  - severity：以 `net` 相对当前时刻，T-1h 内 3，T-24h 内 2，其余 1。
+  - severity：以 `net` 相对当前时刻的**剩余时间（仅未来方向）**分档——T-1h 内 3，T-24h 内 2，其余 1；**`net` 已过去（发射已发生，`net ≤ now`）时归「其余」档 = 1**，不取绝对值双向对称、不因刚发射而按时间距离判为高档（记录仍在则以最低紧迫度留屏）。
 - **SPEC-5.6 OpenSky 航班图层** → category `flight`（默认关闭，开启才轮询）
   - `https://opensky-network.org/api/states/all?lamin=…&lomin=…&lamax=…&lomax=…`（当前视口 bbox），轮询 60s，匿名额度内；关图层立即停拉。severity 恒 1。
 - **SPEC-5.7 CoinGecko 行情 ticker**（非地理事件，只进顶栏）
@@ -130,7 +131,7 @@ interface GeoEvent {
 ```
 
 - **SPEC-6.2** 球面坐标约定（three.js 右手系，y 上）：北极 (90,·)→+Y；(0,0)→+Z；(0,90°E)→+X。实现：`src/globe/geo.ts` latLonToVector3。
-- **SPEC-6.3** 同 id 事件再次出现视为更新（覆盖 ts/severity/summary），不新增标记。过期与保留：①默认过期窗 **48–72h** 无更新移除（具体值视本地存储预算定，可配）；flight 60s 不变。②**用户收藏的事件永久本地保存**，不受过期窗影响（M4）。③为未来时间滑块**预留缓存窗口**（滑块 UI 不进早期版本，见 §9）。
+- **SPEC-6.3** 同 id 事件再次出现视为更新（覆盖 ts/severity/summary），不新增标记。过期与保留：①默认过期窗 **48–72h 无更新移除**——「无更新」以事件**最后一次被写入存储（upsert）的墙钟时刻 `lastSeen`** 为过期计时基准，而非事件时间 `ts`：事件只要出现在某轮源响应中被 upsert 即视为「见到」，其 `lastSeen` 刷新、过期计时重置（续期）；连续 48–72h（具体值视本地存储预算定，可配）未再被任何源 upsert 才移除。`lastSeen` 与 `ts` 相互独立——`ts`（事件时间，SPEC-6.1）仅供展示与排序、不参与过期判定，故长寿命事件即便 `ts` 陈旧超窗，只要仍被源持续返回即续期留屏、不被误清。**冷启动**从本地缓存回填的事件沿用其持久化的 `lastSeen`（关机前最后见到时刻），离线时段一并计入「无更新」时长；回填后首轮刷新按 SPEC-3.11 呼吸式过渡收敛（仍被返回者续期、超窗未返回者熄灭），滚动窗口源（如 USGS `all_hour`）的累积窗跨重启不被清空。flight 60s 不变（同以 `lastSeen` 计窗）。②**用户收藏的事件永久本地保存**，不受过期窗影响（M4）。③为未来时间滑块**预留缓存窗口**（滑块 UI 不进早期版本，见 §9）。
 
 ## 7. 交互规格
 

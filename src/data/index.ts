@@ -33,16 +33,17 @@ export function createDataLayer(): DataLayer {
     if (persistTimer !== null) return
     persistTimer = setTimeout(() => {
       persistTimer = null
-      void cache.persist(store.snapshot()).catch((err) => {
+      void cache.persist(store.entriesForPersist()).catch((err) => {
         console.error('[data] 事件缓存持久化失败', err)
       })
     }, PERSIST_DEBOUNCE_MS)
   }
 
   const scheduler = new Scheduler(T1_PROVIDERS, (events) => {
-    // 每轮成功刷新：去重合并 → 随 now 清扫过期 → 去抖落盘（DP §3.6）
-    store.upsertMany(events)
-    store.sweepExpired(Date.now())
+    // 每轮成功刷新：去重合并+续期 → 随同一 now 清扫过期 → 去抖落盘（SPEC-6.3①，DP §3.6）
+    const now = Date.now()
+    store.upsertMany(events, now)
+    store.sweepExpired(now)
     schedulePersist()
   })
 
@@ -68,7 +69,7 @@ export function createDataLayer(): DataLayer {
         persistTimer = null
       }
       // 落一次持久化（DP §3.6）
-      void cache.persist(store.snapshot()).catch((err) => {
+      void cache.persist(store.entriesForPersist()).catch((err) => {
         console.error('[data] 停机持久化失败', err)
       })
     },

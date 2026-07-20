@@ -23,6 +23,16 @@ export interface GeoEvent {
 }
 
 /**
+ * 持久化/装配层专用记录：事件 + 最后一次被 upsert 的墙钟时刻 lastSeen（SPEC-6.3① 过期基准）。
+ * lastSeen 不进 GeoEvent（REV-009 §1.3 拍板：不加字段，作存储层内部记帐），仅用于
+ * store↔cache 之间的 round-trip 与过期判定，UI/globe 读口（EventStore.snapshot()）不可见。
+ */
+export interface StoredRecord {
+  event: GeoEvent
+  lastSeen: number
+}
+
+/**
  * provider 单轮拉取结果。transport/解析异常一律 throw，退避交 scheduler 处理（SPEC-5.0）。
  */
 export type ProviderResult =

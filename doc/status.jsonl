@@ -1,3 +1,4 @@
+{"date": "2026-07-21", "version": "0.2.3", "milestone": "M2", "summary": "数据层收口：GDACS/LL2 落地，SPEC-6.3 清扫语义改 lastSeen（REV-009 双仲裁 v0.2.3），BUG-018/019 修复关单，M2-01~09 全 ✅（143 单测绿）。下一步 FM-07/08 标记层+矢量风格（首个可视化切片，arch DP 先行）"}
 {"date": "2026-07-21", "version": "0.2.2", "milestone": "M2", "summary": "USGS/EONET provider 落地，M2-05/06 ✅；六份 fixture 入库；G-2/G-3 经 REV-008 仲裁 pin（SPEC-5.3/5.5 全文替换 v0.2.2：humanitarian=DR/FL、LL2 换 detailed）。新缺陷 BUG-018 清扫语义（EONET 误清，M2 签核前闭合）。下一步 BUG-018 链+gdacs/ll2"}
 {"date": "2026-07-21", "version": "0.2.1", "milestone": "M2", "summary": "数据核心骨架：src/data/ 六模块落地，M2-02/03/04 ✅（store/scheduler/backoff，证据 v0.2.0/）。CORS 探测六源通行、OpenSky 封死登记 BUG-017（M3 仲裁）。M2-01 待 provider 卡。下一步 usgs/eonet+fixture"}
 {"date": "2026-07-20", "version": "0.2.0", "milestone": "M2", "summary": "M2 开卡：M2-01~04 登记（FM-05），M2-data DP 过 REV-007 门禁可派 dev，G-1 EONET 降维入 spec(v0.2.1)+pin，F-1 修正登记 BUG-016。另：命名保留 Worlens（D4 二修），orch 全权制入 CLAUDE.md。G-2/G-3 待 fixture 后仲裁"}

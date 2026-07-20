@@ -39,18 +39,19 @@ SPEC-6.1（GeoEvent 模型）、SPEC-6.3（去重/过期）、SPEC-8.4（Indexed
 
 - 存储以 `id` 为主键；**同 id 再现视为更新**，覆盖 ts/severity/summary（及其余可变字段），**不新增第二个条目**（SPEC-6.3）。
 - 去重键即 SPEC-6.1 的 `id`（`{source}:{原始id}`），全局唯一，跨轮询稳定（SPEC-6.1 + 6.3）。
+- 同 id 的每次 upsert，在覆盖上述可变字段之外，**同时刷新该事件的 `lastSeen`（存储层内部记帐，非 GeoEvent 字段）为本次 upsert 的墙钟时刻，即续期**；`lastSeen` 供 §2.4 过期判定使用，与 `ts`（事件时间，供展示/排序）相互独立（SPEC-6.3①）。
 
 ### 2.4 过期清扫（SPEC-6.3）
 
-- 默认过期窗为**单一命名常量，取值须落在 SPEC-6.3 规定的 [48h, 72h] 区间内**（具体值视存储预算定、可配，属 spec 许可的实现自由度，不在本 DP 另定新值）；超窗且无更新的事件从存储移除（SPEC-6.3）。
+- 默认过期窗为**单一命名常量，取值须落在 SPEC-6.3① 规定的 [48h, 72h] 区间内**（具体值视存储预算定、可配，属 spec 许可的实现自由度，不在本 DP 另定新值）；**过期计时基准为 `lastSeen`（事件最后一次被写入存储/upsert 的墙钟时刻），而非事件时间 `ts`**——「超窗且无更新」= 连续超过期窗未被任何源再次 upsert（以 `lastSeen` 计），只要仍被任意源持续 upsert 即续期，即便其 `ts` 陈旧超窗也不清扫；`ts` 仅供展示/排序（SPEC-6.1），不参与过期判定（SPEC-6.3①）。
 - flight 的 60s 特例与**收藏永久保留**均属后续里程碑（flight→FM-12/M3，收藏→FM-17/M4），M2 不实现；但清扫逻辑不得写成**阻碍**后续按类/按收藏豁免的形态（预留 per-category TTL 与保护集的插入点即可，不提前建）（SPEC-6.3）。
 - 清扫的触发时机受 §2.5 约束。
 
 ### 2.5 缓存优先启动的数据侧顺序（SPEC-3.11 数据侧 + SPEC-8.4）
 
-- 启动路径：**先**从 IndexedDB 读回上次缓存事件、灌入存储（供 FM-09 立即上屏），**再**启动轮询（SPEC-3.11：不空网络等待）。
+- 启动路径：**先**从 IndexedDB 读回上次缓存事件（**含其持久化的 `lastSeen`**）、灌入存储（供 FM-09 立即上屏），**再**启动轮询（SPEC-3.11：不空网络等待）。回填事件**沿用其持久化的 `lastSeen`**（关机前最后一次被 upsert 的墙钟时刻），不重置为当前时刻——离线时段一并计入「无更新」时长，与在线时一致（SPEC-6.3①）。
 - 回填缓存时**不执行过期清扫**——缓存里的旧事件要能先上屏，其熄灭由首轮刷新后的清扫 + FM-09 的呼吸过渡承接（SPEC-3.11）。清扫在**每轮成功刷新后**随 `now` 执行。
-- 每轮存储变更后将快照**持久化**回 IndexedDB（可去抖合并写，去抖窗口属实现细节不进 spec）；缓存已从"可重建"升格为启动路径一部分（SPEC-3.11 + 8.4）。
+- 每轮存储变更后将快照**持久化**回 IndexedDB（**round-trip 含每条事件的 `lastSeen`**，可去抖合并写，去抖窗口属实现细节不进 spec）；缓存已从"可重建"升格为启动路径一部分（SPEC-3.11 + 8.4）。
 - IndexedDB 仅承载**事件缓存**；watchlist/设置的持久化属 FM-10/FM-16，本卡不碰（SPEC-8.4 边界）。不承诺离线数据完整性（SPEC-8.4），配额溢出的淘汰策略 M2 不做（过期窗已天然限界）。
 
 ### 2.6 fixtures 事实源（CLAUDE.md §7）
@@ -109,21 +110,22 @@ export interface EventProvider {
 
 ```ts
 export class EventStore {
-  /** 只读全量快照（未过滤）；FM-07 globe 标记层与 FM-10 面板共同消费 */
+  /** 只读全量快照（未过滤，纯 GeoEvent[]，不含内部 lastSeen 记帐）；FM-07 globe 标记层与 FM-10 面板共同消费 */
   snapshot(): readonly GeoEvent[]
   /** 订阅变更，返回退订函数；供 FM-07/FM-09 拉取新快照重绘。变更粒度=整快照，diff 由消费侧算 */
   subscribe(listener: (events: readonly GeoEvent[]) => void): () => void
 
-  /** 去重合并，同 id 覆盖 ts/severity/summary（SPEC-6.3）；scheduler 每轮调用 */
-  upsertMany(events: GeoEvent[]): void
-  /** 缓存回填：灌入且不触发清扫（SPEC-3.11 数据侧顺序，§2.5） */
-  load(events: GeoEvent[]): void
-  /** 过期清扫：移除超窗无更新事件（SPEC-6.3）；每轮刷新后带 now 调用 */
+  /** 去重合并，同 id 覆盖 ts/severity/summary（SPEC-6.3），并将该事件 lastSeen 刷新为 now（续期，SPEC-6.3①）；scheduler 每轮调用 */
+  upsertMany(events: GeoEvent[], now: number): void
+  /** 缓存回填：灌入且不触发清扫，恢复每条事件持久化的 lastSeen（不重置为当前时刻，SPEC-6.3①）（SPEC-3.11 数据侧顺序，§2.5） */
+  load(records: ReadonlyArray<{ event: GeoEvent; lastSeen: number }>): void
+  /** 过期清扫：以 lastSeen（非 ts）为基准，移除连续超窗未被 upsert 的事件（SPEC-6.3①）；每轮刷新后带 now 调用 */
   sweepExpired(now: number): void
 }
 ```
 
 - `snapshot()` 返回**未过滤全量**；分类/watchlist 过滤是消费侧（FM-10/M4）职责，store 不内建过滤（SPEC-8.1 的过滤属 FM-10 边界，见 §3.7）。
+- `load()` 入参的记录形态（此处以 `{ event, lastSeen }` 示意）非强制契约，dev 可择等价机制（如内部 `Map<id, number>` 记 lastSeen，缓存层单独 round-trip 再由 store 内部装配），只要满足「冷启动回填沿用持久化 lastSeen、不重置为当前时刻」这一行为不变量（SPEC-6.3①）；`upsertMany`/`sweepExpired` 同理，内部 lastSeen 记帐形态是实现自由度，`snapshot()` 吐纯 `GeoEvent[]` 不变。
 
 ### 3.4 HTTP 与条件请求（http.ts）
 
@@ -170,7 +172,7 @@ export function createDataLayer(): {
 }
 ```
 
-- `createDataLayer` 内部编排：cache 回填 → 启动调度 → 每轮 `store.upsertMany` + `store.sweepExpired(now)` + 去抖 `cache.persist`。
+- `createDataLayer` 内部编排：cache 回填 → 启动调度 → 每轮以**单一 `now`** 同传 `store.upsertMany(events, now)` + `store.sweepExpired(now)` + 去抖 `cache.persist`（同一轮内 upsert 续期与清扫用同一时钟读数，避免两次取时钟产生的边界不一致，SPEC-6.3①）。
 - CoinGecko（SPEC-5.7 顶栏 ticker）**非 GeoEvent、不进本注册数组**，属 FM-12 独立通道，M2 不设计。
 
 ### 3.7 与相邻模块的数据流与边界
@@ -223,24 +225,25 @@ USGS 的 geojson feed 支持 ETag，优先条件请求省流量；EONET/GDACS/LL
 1. USGS：id/title/lat/lon/ts/url 映射与 severity 三档（mag 阈值），all_day 回填路径（SPEC-5.1）。
 2. EONET：id、最新 geometry 取坐标、category[0] 进 summary、severity 默认（SPEC-5.2；polygon 取点规则见 §6 待裁）。
 3. GDACS：alertlevel→severity 三档、DR/FL+人道字段→humanitarian 否则 disaster、id（SPEC-5.3；字段来源缺口见 §6）。
-4. LL2：id、发射工位坐标、T-24h/T-1h/其余的 severity（注入 now 打三个边界）（SPEC-5.5）。
+4. LL2：id、发射工位坐标、T-24h/T-1h/其余的 severity（注入 now 打三个边界）；net 已过去（net≤now）方向归其余档=1，不取绝对值双向对称（SPEC-5.5）。
 5. 全源输出满足 SPEC-6.1 结构不变量：id 唯一且 `{source}:` 前缀、severity∈{1,2,3}、lat∈[-90,90]/lon∈(-180,180]、title 非空、urls≥1（flight 除外，M2 无 flight）（SPEC-6.1）。
 
 存储（store 单测，无网络）：
-6. 去重：同 id 二次 upsert 覆盖 ts/severity/summary 且总数不增（SPEC-6.3）。
-7. 过期清扫：超窗事件被移除、窗内保留，且窗常量落在 [48h,72h]（SPEC-6.3）。
-8. `load()` 回填不触发清扫；`sweepExpired` 仅在带 now 调用时清扫（SPEC-3.11 数据侧顺序）。
-9. snapshot 未过滤 + subscribe 变更通知（读口契约）。
+6. 去重：同 id 二次 upsert 覆盖 ts/severity/summary 且总数不增（SPEC-6.3 首句）；upsert 同时刷新该事件的 lastSeen（续期）（SPEC-6.3①）。
+7. 过期清扫：过期计时基准为 lastSeen（而非 ts）——事件自 lastSeen 起连续超过期窗未被再次 upsert 才移除，窗内/已续期者保留，窗常量落在 [48h,72h]（SPEC-6.3①）。
+8. 续期：陈旧 ts 但持续被任意源 upsert 的事件不被 sweepExpired 清扫（lastSeen 因持续 upsert 刷新，与 ts 是否推进无关）（SPEC-6.3①，锁 BUG-018 根因）。
+9. `load()` 回填不触发清扫；`sweepExpired` 仅在带 now 调用时清扫（SPEC-3.11 数据侧顺序）。
+10. snapshot 未过滤 + subscribe 变更通知（读口契约）。
 
 调度与退避（scheduler 单测，mock provider）：
-10. 每源按自身 intervalMs 独立排程、互不阻塞（SPEC-5.0/5.1/5.2/5.3/5.5）。
-11. 失败→指数退避 `intervalMs×2^n`、上限 30min；成功/304 后 n 归零（SPEC-5.0）。
-12. 一源持续抛错不影响其余源继续出数（故障隔离，SPEC-5.0）。
-13. 304（notModified）不重新归一化、不退避、不写 store（SPEC-5.0）。
+11. 每源按自身 intervalMs 独立排程、互不阻塞（SPEC-5.0/5.1/5.2/5.3/5.5）。
+12. 失败→指数退避 `intervalMs×2^n`、上限 30min；成功/304 后 n 归零（SPEC-5.0）。
+13. 一源持续抛错不影响其余源继续出数（故障隔离，SPEC-5.0）。
+14. 304（notModified）不重新归一化、不退避、不写 store（SPEC-5.0）。
 
 缓存（cache + 装配，fake-indexeddb 或等价）：
-14. 启动 `createDataLayer().start()` 先 load 缓存入 store、后启调度（SPEC-3.11 数据侧）。
-15. 每轮变更持久化、重启后 round-trip 还原（SPEC-8.4）。
+15. 启动 `createDataLayer().start()` 先 load 缓存入 store、后启调度（SPEC-3.11 数据侧）。
+16. 每轮变更持久化、重启后 round-trip 还原（SPEC-8.4）。
 
 > 检查点 3/4 中 GDACS/LL2 的**字段级精确值**断言依赖 §6 待提案项裁决；未裁决前，QA 对这两源按检查点 5 的 SPEC-6.1 **结构不变量**断言（非空/≥1/范围/前缀），不断言具体字段来源值。此为已知留痕，非判据缩水（SPEC-6.1 不变量真实覆盖，无 spec 子句掉出场景）。
 

@@ -2,11 +2,14 @@
 // 仅承载事件缓存；watchlist/设置持久化属 FM-10/FM-16，不在此（SPEC-8.4 边界）。
 // 不承诺离线数据完整性，配额溢出淘汰 M2 不做（过期窗已天然限界，DP §2.5）。
 
-import type { GeoEvent } from './types'
+import type { GeoEvent, StoredRecord } from './types'
 
 const DB_NAME = 'world_tunnel'
 const DB_VERSION = 1
 const STORE_NAME = 'events'
+
+/** IndexedDB 落盘形态：GeoEvent 字段铺平 + lastSeen，keyPath='id' 直接取事件 id（SPEC-6.3①） */
+type PersistedRecord = GeoEvent & { lastSeen: number }
 
 export class EventCache {
   private readonly factory: IDBFactory
@@ -17,25 +20,33 @@ export class EventCache {
     this.factory = factory
   }
 
-  /** 读回上次缓存的全部事件，供启动先上屏（SPEC-3.11） */
-  async load(): Promise<GeoEvent[]> {
+  /** 读回上次缓存的全部事件（连同 lastSeen），供启动先上屏（SPEC-3.11）与冷启动续期判定（SPEC-6.3①） */
+  async load(): Promise<StoredRecord[]> {
     const db = await this.open()
     return new Promise((resolve, reject) => {
       const tx = db.transaction(STORE_NAME, 'readonly')
       const req = tx.objectStore(STORE_NAME).getAll()
-      req.onsuccess = () => resolve(req.result as GeoEvent[])
+      req.onsuccess = () => {
+        const rows = req.result as PersistedRecord[]
+        resolve(
+          rows.map((row) => {
+            const { lastSeen, ...event } = row
+            return { event, lastSeen }
+          }),
+        )
+      }
       req.onerror = () => reject(req.error)
     })
   }
 
-  /** 覆盖式持久化当前快照（clear + put，SPEC-8.4 每轮变更落盘） */
-  async persist(events: readonly GeoEvent[]): Promise<void> {
+  /** 覆盖式持久化当前快照（clear + put，SPEC-8.4 每轮变更落盘）；随事件一并落盘 lastSeen（SPEC-6.3①） */
+  async persist(records: readonly StoredRecord[]): Promise<void> {
     const db = await this.open()
     return new Promise((resolve, reject) => {
       const tx = db.transaction(STORE_NAME, 'readwrite')
       const store = tx.objectStore(STORE_NAME)
       store.clear()
-      for (const ev of events) store.put(ev)
+      for (const { event, lastSeen } of records) store.put({ ...event, lastSeen })
       tx.oncomplete = () => resolve()
       tx.onerror = () => reject(tx.error)
     })
