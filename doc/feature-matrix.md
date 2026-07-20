@@ -34,4 +34,4 @@
 | FM-26 | M6 | 原生通知 | Capacitor Local Notifications（SPEC-8.3 换端） | （M6 开卡登记） |
 
 后置（无 FM 行，§9 显式登记，非蒸发）：SPEC-8.5 AI 摘要（付费，阶段二前后）、时间滑块（SPEC-6.3 预留缓存窗口）、SPEC-5.8 T4 智能解析（付费）。
-非路线图流程 gate（orch 台账跟踪）：D2 营销、D4 商标检查、D5 用户验证、D16 阶段二触发、D19 license+CLA（详见 doc/product-decisions.md）。
+非路线图流程 gate（orch 台账跟踪）：D2 营销、**D4 商标/重名检查（已前移为近期高优，备选名征集中）**、D5 用户验证、**D12 付费意愿最小验证（发布 gate）**、D16 阶段二触发、D19 license+CLA（详见 doc/product-decisions.md 各条修订）。
