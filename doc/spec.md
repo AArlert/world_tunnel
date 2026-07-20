@@ -10,6 +10,7 @@
 | 2026-07-19 | v0 | 初版：产品概述、布局、视觉、天文、数据契约、模型、交互、个性化、非目标 |
 | 2026-07-19 | v0.1 | M1 起点仲裁（REV-002 裁决 P1~P5）：SPEC-4.1 明确年积日 N 起点；SPEC-3.1 补初始视角与地球初始自转角；SPEC-3.2 补纹理未就绪/失败期表现；SPEC-7.1/7.3 明确拖拽与自转的作用对象；新增 SPEC-7.5 时间基准 |
 | 2026-07-20 | v0.2 | 路线图重排（决议 D1–D21 落地，提案 design-prompt/proposal-roadmap-v2.md，仲裁 REV-005 打回 K-1~K-4 后 REV-006 放行）：改 SPEC-1/2.1/2.4/3.1/3.2(重写)/3.3/5.4/5.5/6.3/8.1/8.4/8.5/§9 共 13 处；新增 SPEC-2.5/3.9/3.10/3.11/5.8/5.9/8.6/8.7/8.8 共 9 条；SPEC-7.4 正文不改、里程碑归属拆挂 FM-07(M2)+FM-14(M3) |
+| 2026-07-20 | v0.2.1 | SPEC-5.2 EONET 坐标降维规则（G-1，REV-007 §2 裁决）：非 Point geometry 取全部坐标点经纬度包围盒中心，Point 为退化情形；跨 ±180° 经线偏移列为已知限界 |
 
 ## 1. 产品概述
 
@@ -82,7 +83,7 @@
   - severity：mag<4.5→1，4.5≤mag<6→2，mag≥6→3。
 - **SPEC-5.2 NASA EONET 自然事件** → category `disaster`
   - `https://eonet.gsfc.nasa.gov/api/v3/events?status=open&days=7`，轮询 300s。
-  - 映射：`id=eonet:{event.id}`；坐标取最新 geometry；categories[0].title 进 summary；sources[].url 为信源。severity 默认 2。
+  - 映射：`id=eonet:{event.id}`；坐标取 geometry 数组中**时间最新**的一条——其 `type` 为 `Point` 时取该点 `[lon, lat]`；为 `Polygon`/`MultiPolygon` 时取该 geometry **全部坐标点的经纬度包围盒中心** `((minLon+maxLon)/2, (minLat+maxLat)/2)` 作为 (lat, lon)（`Point` 为其单点退化情形）。该降维为可视化落点近似、不追求面积质心；跨 ±180° 经线的多边形（EONET 极罕见）落点可能偏移，属已知限界，如需可后续另行提案精化。categories[0].title 进 summary；sources[].url 为信源。severity 默认 2。
 - **SPEC-5.3 GDACS 灾害/人道** → category `disaster` 或 `humanitarian`（事件类型含 DR/FL 且带人道响应字段时）
   - `https://www.gdacs.org/gdacsapi/api/events/geteventlist/MAP`，轮询 300s。
   - alertlevel Green/Orange/Red → severity 1/2/3。`id=gdacs:{eventid}`。

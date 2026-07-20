@@ -1,5 +1,11 @@
 # log — 交接日志（新的在上；仓库内最多 4 块，超限 `make docs-archive`）
 
+## [0.2.0] 2026-07-20 M2 开卡——FM-05 场景登记、数据核心 DP 过门禁、G-1 入 spec
+- **做了什么**：M2 首切片。① qa 登记 M2-01~04（FM-05 数据核心：归一化/去重过期/轮询限流/退避与故障隔离），FM-05 场景列已回填；② arch 交付 `design-prompt/M2-data.md`（数据核心+T1 provider 框架），REV-007 四项门禁全过（行为泄漏/极简/锚点/与 testplan 一致性），**可派 dev**；③ G-1（EONET 非 Point geometry 降维）经 REV-007 §2 即裁，SPEC-5.2 修订入 spec（v0.2.1）并重 pin；④ F-1 失配修正：M2-02 的 flight-60s 子句在 M2 不可满足，依裁决改挂 M3 FM-12 承接，登记 BUG-016（FIX_READY）；⑤ 另：命名核查完成（doc/research/naming-202607.md），用户裁定保留 Worlens（D4 二次修订），research 角色与两份调研报告入库；CLAUDE.md 权责改写（orch 全权，用户反馈制）。
+- **证据**：均为文档/spec 变更，无测试面；门禁与裁决链 doc/review/REV-007-M2-data-gate.md；`make docs-check` 通过。
+- **问题**：① G-2（GDACS 字段来源）/G-3（LL2 字段来源与 list 模式坐标）未裁——REV-007 §3 裁定次序：抓 fixture → arch 提案 → rev 仲裁 → pin → dev 才可实现 gdacs/ll2 映射；② CORS 风险（REV-007 §4）：dev 抓 fixture 时须浏览器侧实测各源 CORS 头，某源封死则登记 bugs 走仲裁；③ O-1/O-2 两条非阻塞小项在 REV-007 §5。
+- **下一步**：派 dev 实现 REV-007 §3.2 安全范围（types/store/http/scheduler/cache/index/usgs/eonet——G-1 已 pin 故 eonet 解锁）+ 抓四源 fixture（含 CORS 实测）；随后 arch 依 fixture 提 G-2/G-3 映射提案。M2-01~04 测试由 qa 在 dev 交付后接卡。
+
 ## [0.1.3] 2026-07-20 路线图重排 v2——产品定位收敛与 spec v0.2 落地
 - **做了什么**：产品负责人两轮定位讨论收敛为 21 条决议（新增 `doc/product-decisions.md`，D1–D21：glanceable「世界的表盘」定位、产品名 Worlens、个性化前移、矢量默认+付费风格包、解析分层 T1–T4、分阶段架构等）。arch 出重排提案 `doc/design-prompt/proposal-roadmap-v2.md`，rev 首轮打回（REV-005，K-1~K-4：SPEC-7.4/3.4 蒸发、搜索缺正文、首启引导缺地理维度），arch 修订后 REV-006 放行。orch 应用 spec v0.2（改 13 处 + 新增 SPEC-2.5/3.9/3.10/3.11/5.8/5.9/8.6/8.7/8.8 共 22 项，按 REV-006 勘误口径含 SPEC-1 与 §9）+ pin；feature-matrix 换 v2 新表（FM-05~26，里程碑 M2–M6，场景列待各 M 开卡登记）；BUG-014 置 FIX_READY（UTC 时钟落 FM-10/M2）。补打 tag v0.1.2。**M1-05/06/14 再归属留痕（REV-005 A3 裁决）**：三场景 ✅ 保留，其实证的是卫星纹理路径的昼夜表现，不覆盖 SPEC-3.2 重写后的「矢量默认风格」——矢量默认昼夜是零覆盖新行为，M2 FM-08 必须建真实场景，否则构成新蒸发。
 - **证据**：纯文档/spec 变更，无测试面；仲裁链 doc/review/REV-005-roadmap-v2.md（打回）→ doc/review/REV-006-roadmap-v2-recheck.md（放行）；`make docs-check` 通过。
@@ -11,9 +17,3 @@
 - **证据**：纯文档变更，无测试面；`make docs-check` 通过。
 - **问题**：无。
 - **下一步**：同 0.1.1 块——开 M2 事件数据层（FM-05/06/07），先核对四笔跨里程碑欠账与 6 条 OPEN 缺陷。
-
-## [0.1.1] 2026-07-20 工作流文档——新增「小步快跑」准则与去重
-- **做了什么**：CLAUDE.md 行为准则新增第 5 条「小步快跑」——按最小可闭环功能切片推进，切片闭环（测试可复跑、证据可登记）即走 `/closeout` 提交并 push，不把整个里程碑攒成一笔大提交（用户拍板的新纪律）。同轮文档审计：① 去重两处——§0 档位选择细节归并到 `/dispatch` skill（原文与其 §1 几乎逐字重复）、§2 的 BUG-001 环境说明归并到 §4；② 修正 §5.3 编号重复——原有两个第 4 条，「上游 API 与 spec 不符」改为第 5 条，「流程/规则类关单口径」保持第 4 条，bugs.md 中「§5.3 第 4 条」的援引不受影响；③ 同步 BUG-004 参数改名漏改的两处——`.claude/agents/qa.md` 与 `.claude/skills/evidence/SKILL.md` 中 `LINT=1` 更正为 `DO_LINT=1`（旧写法传给现 Makefile 会被静默忽略，QA 以为登了 lint 证据实际没登）。另：撤销了一次空跑的 `bump MILESTONE=M2`（骨架无对应真实工作，经用户确认回退），M2 尚未开卡。
-- **证据**：纯文档变更，无测试面；`make docs-check` 通过（守卫含表格结构与幽灵引用校验），见本块所在提交 diff。
-- **问题**：CLAUDE.md 审计结论——123 行不算臃肿，规范（CLAUDE.md）/程序（skills）/角色细则（agents）三层分工基本清楚。两处「疑似重复」经权衡保留：§0 角色表的边界列（orch 派单与回收时的速查，agent md 是给实例自己读的）、§5.3 第 4 条全文（bugs.md 援引的规范原文，且教训性理由值得留在宪法层）。
-- **下一步**：开 M2 事件数据层（FM-05/06/07）。开卡前先核对四笔跨里程碑欠账：SPEC-7.4 相机飞行+详情卡、SPEC-3.8 性能判据（≥200 标记场景回补）、SPEC-3.4「不遮挡标记」真实断言、SPEC-2.1 UTC 时钟归属（BUG-014）；并处置 6 条 OPEN 缺陷（BUG-010/011/012/013/014/015，其中 010 rev 要求 M2 内闭合）。按新准则，M2 按 provider/模块切片逐一 closeout，不攒整里程碑。

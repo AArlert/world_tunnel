@@ -1,3 +1,4 @@
+{"date": "2026-07-20", "version": "0.2.0", "milestone": "M2", "summary": "M2 开卡：M2-01~04 登记（FM-05），M2-data DP 过 REV-007 门禁可派 dev，G-1 EONET 降维入 spec(v0.2.1)+pin，F-1 修正登记 BUG-016。另：命名保留 Worlens（D4 二修），orch 全权制入 CLAUDE.md。G-2/G-3 待 fixture 后仲裁"}
 {"date": "2026-07-20", "version": "0.1.3", "milestone": "M1", "summary": "路线图重排 v2 落地：决议 D1–D21（product-decisions.md）→ arch 提案 → REV-005 打回 → REV-006 放行 → spec v0.2 应用+pin（22 项），FM 换新表 M2–M6，BUG-014 FIX_READY，tag v0.1.2 补打。M2 未开卡，5 缺陷 OPEN"}
 {"date": "2026-07-20", "version": "0.1.2", "milestone": "M1", "summary": "Git 约定补明「commit 即 bump」（每次提交伴随 x.y.z 递增，写入 CLAUDE.md §6）。余同 0.1.1：M2 未开卡，6 缺陷 OPEN"}
 {"date": "2026-07-20", "version": "0.1.1", "milestone": "M1", "summary": "工作流文档切片：CLAUDE.md 新增准则5「小步快跑」（切片闭环即 closeout+push）；去重2处、修§5.3编号重复；同步 BUG-004 漏改的 qa.md/evidence SKILL 参数 DO_LINT。M2 未开卡，6 缺陷 OPEN"}
