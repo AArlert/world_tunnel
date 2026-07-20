@@ -112,7 +112,7 @@ Windows 11 host：node 24 / npm 11 / GNU make 3.81（老版本，Makefile 只用
 ## 6. Git 约定
 
 - 中文 Conventional Commits（`feat:` `fix:` `docs:` `chore:` `test:`）。提交自包含：源码+测试+文档同一提交。
-- **commit 即 bump**：每次提交都伴随版本号 x.y.z 递增（`make bump` 写入 `version.json`，patch 位随切片走，里程碑进位见 §5.1）；没有不带版本递增的提交。
+- **commit 即 bump，纯文档改动除外**：涉及 `src/`/`tests/`/`e2e/`/`scripts/` 或 `doc/spec.md` 的提交都伴随版本号 x.y.z 递增（`make bump` 写入 `version.json`，patch 位随切片走，里程碑进位见 §5.1）；只改 `CLAUDE.md`、`.claude/`（agents/skills）或不改变产品行为的说明性文档时不 bump，直接 commit。
 - **每次 `/closeout` 收尾 commit 后立即 `git push`**（用户长期授权动作）；push 失败如实汇报，不静默跳过、不 force push。
 - 首次克隆后执行 `git config core.hooksPath .githooks` 启用软门禁（pre-commit docs-check）。
 
