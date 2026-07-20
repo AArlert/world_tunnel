@@ -1,9 +1,11 @@
 import * as THREE from 'three'
+import type { GeoEvent } from '../data'
 import { createAtmosphere } from './atmosphere'
 import { loadCoastline } from './coastline'
 import { GlobeControls, type CameraState } from './controls'
 import { createEarth } from './earth'
 import { latLonToVector3 } from './geo'
+import { createMarkerLayer, type MarkerLayer } from './markers'
 import { createStarfield } from './starfield'
 import { sunDirectionModel } from './sun'
 import { createPlaceholderTextures, loadEarthTextures, type EarthTextures } from './textures'
@@ -34,15 +36,26 @@ export class GlobeScene {
   /** M2 事件标记层接入点：随地球自转的容器（SPEC-6.2 模型空间） */
   readonly markerRoot: THREE.Object3D
 
+  /** 标记→列表：canvas 指针 hover 命中标记时回调（SPEC-7.4）；由 UI 层设置 */
+  onMarkerHover?: (id: string | null) => void
+
   private renderer: THREE.WebGLRenderer
   private controls: GlobeControls
   private surface: EarthSurface
+  private markerLayer: MarkerLayer
   /** 仅卫星风格持有昼夜纹理；矢量默认下为 undefined（SPEC-3.2③ 大纹理退出默认加载路径） */
   private textures?: EarthTextures
   private rafId = 0
   private resizeObserver: ResizeObserver
   private lastSunUpdate = 0
+  private lastFrameMs = 0
   private disposed = false
+
+  // hover 拾取（SPEC-7.4 marker→list）：指针移动时置脏，RAF 内合并求值一次（DP §4.3 节流）
+  private raycaster = new THREE.Raycaster()
+  private pointerNdc = new THREE.Vector2()
+  private pointerDirty = false
+  private lastHoveredId: string | null = null
 
   constructor(container: HTMLElement, options: GlobeSceneOptions = {}) {
     this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true })
@@ -58,6 +71,10 @@ export class GlobeScene {
     const earthGroup = new THREE.Object3D()
     this.markerRoot = earthGroup
     this.scene.add(earthGroup)
+
+    // 事件标记层：挂进 markerRoot，随自转与晨昏线一并转动、天然对齐地理（SPEC-6.2/3.7/3.8）
+    this.markerLayer = createMarkerLayer()
+    earthGroup.add(this.markerLayer.object)
 
     if (options.satellite) {
       // 卫星昼夜底图：非默认，仅 DEV/测试经 ?style=satellite 显式启用（BUG-020 方案 a）。
@@ -83,6 +100,10 @@ export class GlobeScene {
     this.resizeObserver.observe(container)
     this.resize(container)
 
+    // hover 拾取监听：只读求交，与 GlobeControls 的指针事件共存、不阻断拖拽（DP §4.3）
+    this.renderer.domElement.addEventListener('pointermove', this.onHoverMove)
+    this.renderer.domElement.addEventListener('pointerleave', this.onHoverLeave)
+
     if (import.meta.env.DEV) {
       // DEV-only 校准钩子（SPEC-3.6 校准场景用），生产构建中整段被摇掉
       ;(window as unknown as { __globeDebug?: unknown }).__globeDebug = {
@@ -104,7 +125,13 @@ export class GlobeScene {
       // 空闲自转作用于地球本体，相机与星空不动（SPEC-7.3 / SPEC-3.5）
       earthGroup.rotation.y += spinDeltaRad
       this.updateSunDir()
+      // 脉冲动画按真实帧间隔累加推进，跨帧率等效（SPEC-3.7/7.5）
+      const nowMs = performance.now()
+      this.markerLayer.tick(this.lastFrameMs === 0 ? 0 : nowMs - this.lastFrameMs)
+      this.lastFrameMs = nowMs
       this.renderer.render(this.scene, this.camera)
+      // 渲染后世界矩阵已更新，再做 hover 拾取（SPEC-7.4 marker→list）
+      this.updateHover()
       this.rafId = requestAnimationFrame(animate)
     }
     animate()
@@ -127,6 +154,48 @@ export class GlobeScene {
     if (this.lastSunUpdate !== 0 && now - this.lastSunUpdate < SUN_UPDATE_MS) return
     this.lastSunUpdate = now
     this.surface.setSunDir(sunDirectionModel(new Date()))
+  }
+
+  /** 更新标记层事件集（消费 store 快照；接线时机属 App/FM-09，非本方法） */
+  setEvents(events: readonly GeoEvent[]) {
+    this.markerLayer.setEvents(events)
+  }
+
+  /** 列表→标记高亮联动（SPEC-7.4） */
+  setHighlightedEvent(id: string | null) {
+    this.markerLayer.setHighlight(id)
+  }
+
+  /** 指针移动：换算 NDC 并置脏，实际拾取在 RAF 内合并求值（节流，DP §4.3） */
+  private onHoverMove = (e: PointerEvent) => {
+    const rect = this.renderer.domElement.getBoundingClientRect()
+    if (rect.width === 0 || rect.height === 0) return
+    this.pointerNdc.set(
+      ((e.clientX - rect.left) / rect.width) * 2 - 1,
+      -((e.clientY - rect.top) / rect.height) * 2 + 1,
+    )
+    this.pointerDirty = true
+  }
+
+  /** 指针离开 canvas：清空 hover（SPEC-7.4） */
+  private onHoverLeave = () => {
+    this.pointerDirty = false
+    if (this.lastHoveredId !== null) {
+      this.lastHoveredId = null
+      this.onMarkerHover?.(null)
+    }
+  }
+
+  /** 命中标记 id 变化时上抛（去抖，避免每帧 setState，DP §3.4）；无回调则跳过求交省算力 */
+  private updateHover() {
+    if (this.onMarkerHover === undefined || !this.pointerDirty) return
+    this.pointerDirty = false
+    this.raycaster.setFromCamera(this.pointerNdc, this.camera)
+    const id = this.markerLayer.pick(this.raycaster)
+    if (id !== this.lastHoveredId) {
+      this.lastHoveredId = id
+      this.onMarkerHover(id)
+    }
   }
 
   /** 卫星风格专用：异步加载昼夜大纹理替换占位（仅 options.satellite 路径调用） */
@@ -162,7 +231,12 @@ export class GlobeScene {
     cancelAnimationFrame(this.rafId)
     this.resizeObserver.disconnect()
     this.controls.dispose()
+    this.renderer.domElement.removeEventListener('pointermove', this.onHoverMove)
+    this.renderer.domElement.removeEventListener('pointerleave', this.onHoverLeave)
 
+    // 标记层先 dispose（从 markerRoot 摘除自身两个 InstancedMesh 并释放 GPU 缓冲），
+    // 故下方 traverse 不会再触及它们
+    this.markerLayer.dispose()
     // 矢量地表的 LineSegments（海岸线/网格）不是 Mesh/Points，traverse 不覆盖，须显式释放
     this.surface.dispose?.()
     this.scene.traverse((obj) => {

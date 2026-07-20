@@ -1,16 +1,21 @@
-import { useEffect, useRef } from 'react'
-import { GlobeScene } from './globe/GlobeScene'
+import { useEffect, useState } from 'react'
+import { createDataLayer, type GeoEvent } from './data'
+import { GlobeStage } from './ui/GlobeStage'
 
 export function App() {
-  const containerRef = useRef<HTMLDivElement>(null)
+  const [events, setEvents] = useState<readonly GeoEvent[]>([])
 
+  // 数据层生命周期挂在 App：createDataLayer().start() 后事件经 store 订阅流入标记层与面板
+  // （缓存优先启动，SPEC-3.11；轮询/故障隔离在数据层内部，SPEC-5.0）
   useEffect(() => {
-    // DEV/测试专用：?style=satellite 显式走卫星风格路径（BUG-020 方案 a），生产忽略、默认矢量
-    const satellite =
-      import.meta.env.DEV &&
-      new URLSearchParams(window.location.search).get('style') === 'satellite'
-    const scene = new GlobeScene(containerRef.current!, { satellite })
-    return () => scene.dispose()
+    const dataLayer = createDataLayer()
+    setEvents(dataLayer.store.snapshot()) // 先铺一次当前快照（缓存回填/首轮刷新前通常为空）
+    const unsubscribe = dataLayer.store.subscribe((snap) => setEvents(snap))
+    void dataLayer.start()
+    return () => {
+      unsubscribe()
+      dataLayer.stop()
+    }
   }, [])
 
   return (
@@ -20,11 +25,7 @@ export function App() {
         <span className="placeholder">行情 ticker（M3）</span>
       </header>
       <main className="stage">
-        <div id="globe-container" ref={containerRef} />
-        <aside className="side-panel">
-          <h2>Live events</h2>
-          <p className="placeholder">事件流（M2）</p>
-        </aside>
+        <GlobeStage events={events} />
       </main>
     </div>
   )

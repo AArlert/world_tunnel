@@ -1,4 +1,5 @@
 import type { Page } from '@playwright/test'
+import type { GeoEvent } from '../src/data'
 
 /**
  * GlobeScene 的 DEV-only 调试钩子（`window.__globeDebug`，锁在 import.meta.env.DEV
@@ -247,6 +248,23 @@ export async function waitForSurfaceReady(page: Page) {
   })
 }
 
+/**
+ * M2-10/M2-11 用：经调试钩子驱动 GlobeScene.setEvents（公开方法，见
+ * src/globe/GlobeScene.ts），以构造数据确定性注入标记层，不依赖真实网络轮询
+ * （任务卡明确要求：事件注入用构造数据经 debug 钩子/setEvents 驱动）。
+ * `window.__globeDebug.globe` 在 GlobeScene 构造函数里被赋值为 `this`（GlobeScene 实例
+ * 本身），故除 DebugHook 类型窄化暴露的字段外，其公开方法（含 setEvents）在运行时同样
+ * 可达；此处仅为 page.evaluate 内的调用补一个局部类型断言，不改 src/。
+ */
+export async function setDebugEvents(page: Page, events: GeoEvent[]) {
+  await page.evaluate((evts) => {
+    const dbg = (
+      window as unknown as { __globeDebug: { globe: { setEvents(e: GeoEvent[]): void } } }
+    ).__globeDebug
+    dbg.globe.setEvents(evts)
+  }, events)
+}
+
 /** 地球 canvas 实际 WebGL 绘图缓冲尺寸（设备像素，已含 devicePixelRatio 缩放）。 */
 export async function canvasBufferSize(page: Page): Promise<{ width: number; height: number }> {
   return page.evaluate(() => {
@@ -384,4 +402,87 @@ export async function findColorInRegion(
       }),
     { region, target, tolerance },
   )
+}
+
+/**
+ * M2-10 用：在 canvas 指定矩形区域内逐像素扫描，找出与给定 `background` 参照色偏差
+ * （各通道差之和）超过 `threshold` 的像素，返回其包围盒（设备像素）与命中数。
+ * 与 findColorInRegion 的区别——那个函数按「是否落在某个已知目标色附近」筛选，本函数
+ * 按「是否明显偏离背景参照色」筛选，不预设脉冲光环实际渲染色的具体数值（脉冲环用
+ * AdditiveBlending 与背景混合，混合后的确切颜色属实现细节，不应作为期望值写进断言）。
+ * 用途：量测标记 + 脉冲光环的整体像素footprint 包围盒宽度，作为
+ * 「标记基础尺寸与脉冲光环幅度随 severity 递增」（SPEC-3.7）的序关系代理——与
+ * e2e/atmosphere-glow.spec.ts 用「blueness 偏移量」代替「断言辉光具体颜色值」是同一类
+ * 手法。background 参照色由调用方在场景内实测取得（如同一像素在未放置标记前的颜色），
+ * 不是从 spec 推导的期望色值。
+ */
+export async function boundingBoxOfDeviation(
+  page: Page,
+  region: { x: number; y: number; width: number; height: number },
+  background: [number, number, number],
+  threshold: number,
+): Promise<{ minX: number; maxX: number; minY: number; maxY: number; count: number } | null> {
+  return page.evaluate(
+    ({ region, background, threshold }) =>
+      new Promise<{ minX: number; maxX: number; minY: number; maxY: number; count: number } | null>(
+        (resolve) => {
+          requestAnimationFrame(() => {
+            const canvas = document.querySelector('#globe-container canvas') as HTMLCanvasElement
+            const off = document.createElement('canvas')
+            off.width = canvas.width
+            off.height = canvas.height
+            const ctx = off.getContext('2d')!
+            ctx.drawImage(canvas, 0, 0)
+            const data = ctx.getImageData(region.x, region.y, region.width, region.height).data
+            let minX = Infinity
+            let maxX = -Infinity
+            let minY = Infinity
+            let maxY = -Infinity
+            let count = 0
+            for (let py = 0; py < region.height; py++) {
+              for (let px = 0; px < region.width; px++) {
+                const i = (py * region.width + px) * 4
+                const r = data[i]
+                const g = data[i + 1]
+                const b = data[i + 2]
+                const delta =
+                  Math.abs(r - background[0]) + Math.abs(g - background[1]) + Math.abs(b - background[2])
+                if (delta > threshold) {
+                  count += 1
+                  const gx = region.x + px
+                  const gy = region.y + py
+                  if (gx < minX) minX = gx
+                  if (gx > maxX) maxX = gx
+                  if (gy < minY) minY = gy
+                  if (gy > maxY) maxY = gy
+                }
+              }
+            }
+            resolve(count === 0 ? null : { minX, maxX, minY, maxY, count })
+          })
+        },
+      ),
+    { region, background, threshold },
+  )
+}
+
+/**
+ * M2-13 用：黑盒读取当前标记层已绘制的实例数（= 球面已加载事件标记数），用于比对事件流
+ * 面板的列表条目数（SPEC-2.2「事件流面板」定名即事件列表语义）。定位方式与
+ * sampleEarthGeometry/sampleStarfieldPose 同一手法——在 markerRoot.children 中按
+ * three.js 内建 `type` 字段区分（地表底面是 'Mesh'，标记层根节点是 markers.ts
+ * 里的 `readonly object = new THREE.Group()`，type 为 'Group'，全场景仅此一个 Group），
+ * 再读其首个子节点（dots，InstancedMesh）的公开 `.count` 属性（渲染实例高水位）。
+ * 只读公开的 Object3D 结构与 three.js 标准 InstancedMesh API，不触碰 GlobeScene/
+ * MarkerLayer 的私有字段。
+ */
+export async function sampleMarkerCount(page: Page): Promise<number> {
+  return page.evaluate(() => {
+    const dbg = (window as unknown as { __globeDebug: DebugHook }).__globeDebug
+    const markerGroup = dbg.globe.markerRoot.children.find(
+      (c) => (c as unknown as { type?: string }).type === 'Group',
+    ) as unknown as { children: { count: number }[] } | undefined
+    if (!markerGroup) throw new Error('标记层根节点（Group）未在 markerRoot.children 中找到')
+    return markerGroup.children[0]?.count ?? 0
+  })
 }

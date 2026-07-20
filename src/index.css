@@ -49,13 +49,16 @@ body,
   inset: 0;
 }
 
-.side-panel {
+/* 事件流面板：右侧 300px 可折叠、球主列表从（SPEC-2.2） */
+.event-panel {
   position: absolute;
   top: 12px;
   right: 12px;
   bottom: 12px;
   width: 300px;
-  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   background: rgba(10, 12, 20, 0.75);
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 10px;
@@ -63,11 +66,74 @@ body,
   font-size: 13px;
 }
 
-.side-panel h2 {
-  font-size: 14px;
-  margin-bottom: 8px;
+.event-panel--collapsed {
+  width: auto;
+  bottom: auto;
 }
 
-.side-panel .placeholder {
+.event-panel__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.event-panel__head h2 {
+  font-size: 14px;
+}
+
+.event-panel__toggle {
+  padding: 6px 10px;
+  background: none;
+  border: none;
+  color: rgba(232, 232, 236, 0.7);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.event-panel__empty {
+  padding: 16px 14px;
   color: rgba(232, 232, 236, 0.4);
+}
+
+.event-panel__list {
+  flex: 1;
+  overflow-y: auto;
+  list-style: none;
+}
+
+/* 联动高亮用中性白色调，不复用分类色语义（DP §2.4） */
+.event-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-left: 2px solid transparent;
+  cursor: pointer;
+}
+
+.event-row--active {
+  background: rgba(255, 255, 255, 0.08);
+  border-left-color: rgba(232, 232, 236, 0.7);
+}
+
+.event-row__dot {
+  flex: 0 0 auto;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.event-row__title {
+  flex: 1;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.event-row__time {
+  flex: 0 0 auto;
+  color: rgba(232, 232, 236, 0.4);
+  font-size: 11px;
 }
