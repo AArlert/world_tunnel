@@ -11,7 +11,7 @@
 | FM-03 | M1 | 地球渲染 | src/globe/（昼夜 shader/大气/星空；SPEC-3.2~3.6） | M1-04, M1-05, M1-06, M1-07, M1-08, M1-12, M1-14 |
 | FM-04 | M1 | 地球交互 | src/globe/（拖拽/缩放/惯性/自转；SPEC-7.1/7.2/7.3/7.5。SPEC-7.4 未交付，拆挂 FM-07+FM-14） | M1-09, M1-10, M1-11 |
 | FM-05 | M2 | 数据核心 | src/data/（GeoEvent/scheduler/缓存/去重/过期；SPEC-5.0, 6.1, 6.2, 6.3） | M2-01, M2-02, M2-03, M2-04 |
-| FM-06 | M2 | T1 信源 | src/data/providers/（USGS/EONET/GDACS/LL2；SPEC-5.1, 5.2, 5.3, 5.5, 5.8-T1） | （M2 开卡登记） |
+| FM-06 | M2 | T1 信源 | src/data/providers/（USGS/EONET/GDACS/LL2；SPEC-5.1, 5.2, 5.3, 5.5, 5.8-T1） | M2-05, M2-06 |
 | FM-07 | M2 | 事件标记 + 面板 | src/globe/ 标记层 + src/ui/ 事件流面板（SPEC-2.2, 3.7, 3.8；SPEC-3.4 不遮挡真标记回补；SPEC-7.4 列表↔标记联动分片） | （M2 开卡登记） |
 | FM-08 | M2 | 矢量默认风格 | src/globe/ 矢量昼夜风格，替换卫星默认（SPEC-3.2 重写, 3.3） | （M2 开卡登记） |
 | FM-09 | M2 | 缓存优先启动 | src/data/ 启动缓存 + 呼吸式过渡（SPEC-3.11, 8.4） | （M2 开卡登记） |

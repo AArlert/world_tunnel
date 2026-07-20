@@ -11,6 +11,7 @@
 | 2026-07-19 | v0.1 | M1 起点仲裁（REV-002 裁决 P1~P5）：SPEC-4.1 明确年积日 N 起点；SPEC-3.1 补初始视角与地球初始自转角；SPEC-3.2 补纹理未就绪/失败期表现；SPEC-7.1/7.3 明确拖拽与自转的作用对象；新增 SPEC-7.5 时间基准 |
 | 2026-07-20 | v0.2 | 路线图重排（决议 D1–D21 落地，提案 design-prompt/proposal-roadmap-v2.md，仲裁 REV-005 打回 K-1~K-4 后 REV-006 放行）：改 SPEC-1/2.1/2.4/3.1/3.2(重写)/3.3/5.4/5.5/6.3/8.1/8.4/8.5/§9 共 13 处；新增 SPEC-2.5/3.9/3.10/3.11/5.8/5.9/8.6/8.7/8.8 共 9 条；SPEC-7.4 正文不改、里程碑归属拆挂 FM-07(M2)+FM-14(M3) |
 | 2026-07-20 | v0.2.1 | SPEC-5.2 EONET 坐标降维规则（G-1，REV-007 §2 裁决）：非 Point geometry 取全部坐标点经纬度包围盒中心，Point 为退化情形；跨 ±180° 经线偏移列为已知限界 |
+| 2026-07-21 | v0.2.2 | G-2/G-3 字段映射 pin（提案 design-prompt/proposal-gdacs-ll2.md，REV-008 放行）：SPEC-5.3 全文替换（eventid 分组、Point 中心点包围盒坐标、字段来源实证、humanitarian 判类=eventtype∈{DR,FL}——原「人道响应字段」实测不存在被迫重写、UTC 解析陷阱）；SPEC-5.5 全文替换（端点换 mode=detailed、pad 坐标、urls 回落链、ts=net）。SPEC-6.3 清扫语义不在本次（BUG-018 独立路径） |
 
 ## 1. 产品概述
 
@@ -84,15 +85,19 @@
 - **SPEC-5.2 NASA EONET 自然事件** → category `disaster`
   - `https://eonet.gsfc.nasa.gov/api/v3/events?status=open&days=7`，轮询 300s。
   - 映射：`id=eonet:{event.id}`；坐标取 geometry 数组中**时间最新**的一条——其 `type` 为 `Point` 时取该点 `[lon, lat]`；为 `Polygon`/`MultiPolygon` 时取该 geometry **全部坐标点的经纬度包围盒中心** `((minLon+maxLon)/2, (minLat+maxLat)/2)` 作为 (lat, lon)（`Point` 为其单点退化情形）。该降维为可视化落点近似、不追求面积质心；跨 ±180° 经线的多边形（EONET 极罕见）落点可能偏移，属已知限界，如需可后续另行提案精化。categories[0].title 进 summary；sources[].url 为信源。severity 默认 2。
-- **SPEC-5.3 GDACS 灾害/人道** → category `disaster` 或 `humanitarian`（事件类型含 DR/FL 且带人道响应字段时）
-  - `https://www.gdacs.org/gdacsapi/api/events/geteventlist/MAP`，轮询 300s。
-  - alertlevel Green/Orange/Red → severity 1/2/3。`id=gdacs:{eventid}`。
+- **SPEC-5.3 GDACS 灾害/人道** → category `disaster` 或 `humanitarian`
+  - `https://www.gdacs.org/gdacsapi/api/events/geteventlist/MAP`，轮询 300s。响应为 GeoJSON FeatureCollection；**同一 `eventid` 出现多条要素**（1 条 `geometry.type='Point'` 中心点 + 若干 Polygon 影响区 / LineString 路径）。归一化按 `eventid` 分组，每组产出一个事件（去重键 `gdacs:{eventid}` 亦合并同 eventid 的多要素）。
+  - 坐标：取该 eventid **全部 `geometry.type='Point'` 中心点要素**坐标的经纬度包围盒中心 `((minLon+maxLon)/2,(minLat+maxLat)/2)`（单点退化为该点本身）；Polygon/LineString 要素仅为几何细节，不单独成事件、不参与取坐标。
+  - 字段（事件级字段跨同 eventid 各要素一致，取该 eventid 的 Point 中心点要素 `properties`）：`id=gdacs:{eventid}`；title=`name`；summary=`htmldescription`（纯文本，无 HTML 标签）；urls=`[url.report]`；ts=`datemodified`——**GDACS 时间戳为 UTC 且无时区后缀，归一化须显式按 UTC 解析（补 `Z` 或等价），不得依赖 `Date.parse` 的本地时区解释**。
+  - severity：`alertlevel` Green/Orange/Red → 1/2/3。
+  - category：`eventtype ∈ {DR, FL}` → `humanitarian`，其余（EQ/TC/…）→ `disaster`。
 - **SPEC-5.4 GDELT 突发新闻/冲突** → category `news` 或 `conflict`（M3 起点细化查询词与判类规则，此处 pin 接口形态）
   - `https://api.gdeltproject.org/api/v2/doc/doc?query=...&mode=ArtList&format=json&maxrecords=50`，轮询 180s。
   - 定位分层（SPEC-5.8）：①优先采用 GDELT 自带地理编码结果（T3，不自研 NER）；②仍无坐标时用本地 GeoNames gazetteer（T2）按国家/城市兜底；③再无定位则丢弃（SPEC-5.4a）。
 - **SPEC-5.5 Launch Library 2 火箭发射** → category `launch`（M2：属 T1 自带坐标源，随首批 provider 接入）
-  - `https://ll.thespacedevs.com/2.2.0/launch/upcoming/?limit=10&mode=list`，轮询 1800s（免费额 15 req/h，预算 ≤2 req/h）。
-  - 坐标取发射工位；T-24h 内 severity 2，T-1h 内 3，其余 1。`id=ll2:{launch.id}`。
+  - `https://ll.thespacedevs.com/2.2.0/launch/upcoming/?limit=10&mode=detailed`，轮询 1800s（免费额 15 req/h，预算 ≤2 req/h；`mode=detailed` 仅增大单响应体，请求数不变仍 2 req/h）。改用 `mode=detailed` 因 `mode=list` 响应不含发射工位坐标。
+  - 字段映射：`id=ll2:{results[].id}`；坐标取发射工位 `pad.latitude`/`pad.longitude`（字符串数值，parse 为 number）；title=`name`；summary=`mission.description`；urls 取 `infoURLs[].url` ∪ `vidURLs[].url`，二者皆空时回落自链 `url`（保证 urls≥1）；ts=`net`（T-0，ISO 含 `Z`，`Date.parse` 直接得 UTC）。
+  - severity：以 `net` 相对当前时刻，T-1h 内 3，T-24h 内 2，其余 1。
 - **SPEC-5.6 OpenSky 航班图层** → category `flight`（默认关闭，开启才轮询）
   - `https://opensky-network.org/api/states/all?lamin=…&lomin=…&lamax=…&lomax=…`（当前视口 bbox），轮询 60s，匿名额度内；关图层立即停拉。severity 恒 1。
 - **SPEC-5.7 CoinGecko 行情 ticker**（非地理事件，只进顶栏）

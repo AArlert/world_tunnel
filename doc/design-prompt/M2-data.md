@@ -33,7 +33,7 @@ SPEC-6.1（GeoEvent 模型）、SPEC-6.3（去重/过期）、SPEC-8.4（Indexed
 - HTTP 失败**指数退避**：`nextDelay = min(intervalMs × 2^n, 30min)`，n 为连续失败次数；成功（含 304）后 n 归零（SPEC-5.0）。
 - 支持 ETag/Last-Modified 的源发**条件请求**（`If-None-Match` / `If-Modified-Since`）；**304 视为成功且无新数据**——不重新归一化、不退避、不改动存储（SPEC-5.0）。
 - **故障隔离**：任一源的网络/解析异常必须被本源的轮询循环捕获，不得冒泡到其他源或渲染；退避后自行恢复（SPEC-5.0）。
-- LL2 走 `mode=list`、limit=10、1800s（SPEC-5.5）——间隔即预算闸门，DEV 不得为"更实时"缩短。
+- LL2 走 `mode=detailed`、limit=10、1800s（SPEC-5.5，REV-008 裁决换端点参数）——间隔即预算闸门，DEV 不得为"更实时"缩短。
 
 ### 2.3 去重与更新（SPEC-6.3）
 
@@ -207,7 +207,7 @@ USGS 的 geojson feed 支持 ETag，优先条件请求省流量；EONET/GDACS/LL
 
 ### 4.4 已知工程陷阱（登记而非绕过）
 - **CORS**：T1 源在浏览器直连可能缺 `Access-Control-Allow-Origin`（GDACS 尤需实测）。零服务器纪律（SPEC-9）禁止加代理；按 SPEC-5.0，CORS 失败的源应**优雅退避降级、不拖垮其余源与渲染**。若某源确被 CORS 封死，属 spec/上游契约缺陷，**登记 bugs.md 交 rev 仲裁**（web 端可行性 vs 推迟到原生 M6），不在代码里硬绕。
-- **LL2 `mode=list` 字段**：list 模式可能不含发射工位经纬度（SPEC-5.5 要求"坐标取发射工位"）。以 fixture 实测为准；若 list 无坐标，属字段缺口，见 §6 待提案项，登记后再定端点，不擅自改 SPEC-5.5 指定的端点参数。
+- **LL2 `mode=list` 字段**：list 模式可能不含发射工位经纬度（SPEC-5.5 要求"坐标取发射工位"）。已裁决：实测 list 无坐标，端点改 `mode=detailed`（REV-008 §6.2 已入 spec）。
 - 测试链路走 Vitest（Node），不涉及 BUG-001 的 Python/AppData 约束。
 
 ## 5. 验收判据
@@ -250,6 +250,6 @@ USGS 的 geojson feed 支持 ETag，优先条件请求省流量；EONET/GDACS/LL
 | --- | --- | --- | --- |
 | G-1 | EONET geometry 为 Polygon/MultiPolygon 时如何降维到单一 lat/lon（SPEC-5.2 "坐标取最新 geometry" 只覆盖 Point） | SPEC-5.2 + 6.1 | eonet 归一化坐标合法性；检查点 2 精确断言 |
 | G-2 | GDACS 的 title/summary/urls/lat-lon **字段来源**未在 SPEC-5.3 给出（仅给 severity/id/category）；"人道响应字段"具体指哪个字段亦未明 | SPEC-5.3 + 6.1 | gdacs 归一化；检查点 3 精确断言 |
-| G-3 | LL2 的 title/summary/urls **字段来源**未在 SPEC-5.5 给出；且 `mode=list` 是否含工位坐标待实测（§4.4） | SPEC-5.5 + 6.1 | ll2 归一化；检查点 4 精确断言 |
+| G-3 | LL2 的 title/summary/urls **字段来源**未在 SPEC-5.5 给出；且 `mode=list` 是否含工位坐标待实测（§4.4）——已裁决闭合，见 REV-008 | SPEC-5.5 + 6.1 | ll2 归一化；检查点 4 精确断言 |
 
 处理建议（供 orch/rev 参考，非本 DP 决议）：G-1 可现在裁（几何规则，不依赖 fixture）；G-2/G-3 依赖字段来源，宜**先派 qa/dev 抓 fixture**，再由 arch 依真实响应提 spec 映射提案、rev 仲裁 pin，之后 dev 才实现这两源的精确映射。M2 其余部分（USGS/EONET 主干 + store + scheduler + cache）不被这三项阻塞，可先行。
