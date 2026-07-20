@@ -1,3 +1,4 @@
+{"date": "2026-07-20", "version": "0.1.3", "milestone": "M1", "summary": "路线图重排 v2 落地：决议 D1–D21（product-decisions.md）→ arch 提案 → REV-005 打回 → REV-006 放行 → spec v0.2 应用+pin（22 项），FM 换新表 M2–M6，BUG-014 FIX_READY，tag v0.1.2 补打。M2 未开卡，5 缺陷 OPEN"}
 {"date": "2026-07-20", "version": "0.1.2", "milestone": "M1", "summary": "Git 约定补明「commit 即 bump」（每次提交伴随 x.y.z 递增，写入 CLAUDE.md §6）。余同 0.1.1：M2 未开卡，6 缺陷 OPEN"}
 {"date": "2026-07-20", "version": "0.1.1", "milestone": "M1", "summary": "工作流文档切片：CLAUDE.md 新增准则5「小步快跑」（切片闭环即 closeout+push）；去重2处、修§5.3编号重复；同步 BUG-004 漏改的 qa.md/evidence SKILL 参数 DO_LINT。M2 未开卡，6 缺陷 OPEN"}
 {"date": "2026-07-20", "version": "0.1.0", "milestone": "M1", "summary": "M1 地球仪完成：astro 天文+globe 渲染/shader+controls 交互三模块，spec 经 REV-002 仲裁升 v0.1（新增 SPEC-7.5），13 场景全 ✅，regress 全绿，rev 签核通过。修 6 条证据工具链失效缺陷；M1-07 曾因判据未真测被退回重做。5 条缺陷留 M2"}
