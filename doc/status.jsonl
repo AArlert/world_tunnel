@@ -1,3 +1,4 @@
+{"date": "2026-07-21", "version": "0.2.5", "milestone": "M2", "summary": "FM-08 矢量默认落地：M2-15/16/17 ✅,BUG-020 关单,三条 e2e 适配,首包 800KB(gzip 224KB)。全量 147 单测+23 e2e 绿。夜面辉光观感待产品负责人 preview 验收。下一步 dev FM-07 标记层+面板"}
 {"date": "2026-07-21", "version": "0.2.4", "milestone": "M2", "summary": "视觉层前置：M2-globe DP 过 REV-010 门禁,SPEC-3.2a(矢量视觉参数)/2.2a(面板列表行)入 spec v0.2.4,M2-10~17 八场景登记,BUG-020 登记(卫星 e2e×FM-08)。下一步 dev 双卡 FM-07/FM-08,全绿后 preview 验收"}
 {"date": "2026-07-21", "version": "0.2.3", "milestone": "M2", "summary": "数据层收口：GDACS/LL2 落地，SPEC-6.3 清扫语义改 lastSeen（REV-009 双仲裁 v0.2.3），BUG-018/019 修复关单，M2-01~09 全 ✅（143 单测绿）。下一步 FM-07/08 标记层+矢量风格（首个可视化切片，arch DP 先行）"}
 {"date": "2026-07-21", "version": "0.2.2", "milestone": "M2", "summary": "USGS/EONET provider 落地，M2-05/06 ✅；六份 fixture 入库；G-2/G-3 经 REV-008 仲裁 pin（SPEC-5.3/5.5 全文替换 v0.2.2：humanitarian=DR/FL、LL2 换 detailed）。新缺陷 BUG-018 清扫语义（EONET 误清，M2 签核前闭合）。下一步 BUG-018 链+gdacs/ll2"}

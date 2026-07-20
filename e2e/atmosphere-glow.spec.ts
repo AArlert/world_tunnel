@@ -5,12 +5,20 @@ import {
   samplePixelBox,
   setSunDir,
   waitForGlobeDebug,
-  waitForRealEarthTexture,
+  waitForSurfaceReady,
   waitNextFrame,
 } from './globeDebug'
 
 // M1-07：大气菲涅尔辉光——球缘可见主色 #4a90d9 的辉光，由球缘向外衰减（SPEC-3.4，
 // 截图判据）。
+//
+// 风格无关性说明（BUG-020 观察扩充）：SPEC-3.4 断言的对象是大气辉光壳本身，与底图风格
+// （矢量默认 SPEC-3.2②/卫星 SPEC-3.2③）无关——大气材质/geometry 不因风格切换而改变
+// （design-prompt M2-globe.md §1 R-8 声明：FM-07/FM-08 均不改 atmosphere.ts）。故本文件
+// 不追加 ?style=satellite，走应用默认（矢量）路径，验证默认路径下大气仍达标；渲染稳定门
+// 也相应换成风格无关的 waitForSurfaceReady（读 uSunDir，矢量/卫星两条路径均有），不再用
+// 卫星专属的 waitForRealEarthTexture（读 uDayMap，矢量默认下该 uniform 恒不存在，见
+// BUG-020 根因）。
 //
 // 背景（REV-003 裁决，doc/review/REV-003.md §1）：本场景此前曾以
 // `uPower>0 && uIntensity>0`（见 tests/atmosphere.test.ts）充当"衰减"判据被置 ✅，
@@ -41,7 +49,7 @@ test('球缘菲涅尔辉光主色偏蓝且强度沿径向向外单调衰减（SP
   await page.bringToFront()
   await page.goto('/')
   await waitForGlobeDebug(page)
-  await waitForRealEarthTexture(page)
+  await waitForSurfaceReady(page)
 
   // 前置自检（非 SPEC 判据）：确认相机仍是 SPEC-3.1 默认视角，采样行取画布竖直中心
   const cam = await sampleCamera(page)

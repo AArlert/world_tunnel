@@ -131,6 +131,37 @@ export async function setSunDir(page: Page, dir: Vec3) {
 }
 
 /**
+ * 矢量默认风格专用（SPEC-3.2②）的 setSunDir：矢量地球由三个独立 ShaderMaterial 组成
+ * （底面 base + 海岸线 coast + 网格 grid，见 src/globe/vectorEarth.ts），各自持有独立的
+ * `uSunDir` uniform 对象——base 直接是 markerRoot.children 中的 SphereGeometry 网格，
+ * coast/grid 是该网格的子节点（LineSegments）。M1 沿用的 `setSunDir` 只对 base 网格自身
+ * 赋值（卫星风格 src/globe/earth.ts 只有单一材质，够用），矢量风格下若只调用它，
+ * coast/grid 的 uSunDir 不受控、仍由 GlobeScene 每 60s 用真实时刻写入（SPEC-4.5），
+ * 与 base 的注入值不同步。本函数在 base 网格的基础上再递归遍历其子节点，把同一 dir
+ * 写入每个含 uSunDir uniform 的材质——与 setSunDir 同样只对已知 uniform 名赋值，
+ * 不解析/移植 fragment shader 的混合公式。
+ */
+type SunDirTarget = {
+  material?: { uniforms?: { uSunDir?: { value: Vec3 & { set(x: number, y: number, z: number): void } } } }
+  children?: SunDirTarget[]
+}
+
+export async function setSunDirVector(page: Page, dir: Vec3) {
+  await page.evaluate((d) => {
+    const dbg = (window as unknown as { __globeDebug: DebugHook }).__globeDebug
+    const earth = dbg.globe.markerRoot.children.find(
+      (c) => c.geometry?.type === 'SphereGeometry',
+    ) as unknown as SunDirTarget | undefined
+    if (!earth) throw new Error('地球网格（SphereGeometry）未在 markerRoot.children 中找到')
+    const targets: SunDirTarget[] = [earth, ...(earth.children ?? [])]
+    for (const obj of targets) {
+      const uniform = obj.material?.uniforms?.uSunDir
+      if (uniform) uniform.value.set(d.x, d.y, d.z)
+    }
+  }, dir)
+}
+
+/**
  * 读回地球材质当前的 `uSunDir`（SPEC-4.5：由真实时刻驱动，GlobeScene 每 60s 更新一次）。
  * M1-14 用它把取样点由「写死坐标」改为「从当前太阳方向反算」——直下点全天扫过所有经度，
  * 可见半球存在全为夜侧的时刻，写死取样点必出偶发红。只读一个已知 uniform 的值，
@@ -192,6 +223,27 @@ export async function waitForRealEarthTexture(page: Page) {
     const value = earth?.material?.uniforms?.uDayMap?.value
     if (!value) return false
     return value.isDataTexture !== true
+  })
+}
+
+/**
+ * 风格无关的渲染稳定门：等待地表材质的 `uSunDir` uniform 已挂载真实向量值。
+ * 与 `waitForRealEarthTexture` 的区别——那个门读卫星专属的 `uDayMap`（矢量默认风格下
+ * 该 uniform 恒不存在，等待永不 resolve，见 BUG-020）；`uSunDir` 则是 SPEC-3.2① 定义的
+ * 跨风格昼夜数学的共同输入，矢量（src/globe/vectorEarth.ts）与卫星（src/globe/earth.ts）
+ * 两条路径的地表材质都在 GlobeScene 构造函数内、`window.__globeDebug` 挂载之前同步赋值
+ * 该 uniform（各自的 createVectorEarth/createEarth 均在 earthGroup.add 之后才设置调试钩子）。
+ * 用于与底图风格无关的场景（如 SPEC-3.4 大气辉光，覆盖对象是大气本身、不依赖地表纹理
+ * 是否为真实卫星图像）的显式渲染就绪判定，不写死等待时长。
+ */
+export async function waitForSurfaceReady(page: Page) {
+  await page.waitForFunction(() => {
+    const dbg = (window as unknown as { __globeDebug?: DebugHook }).__globeDebug
+    if (!dbg) return false
+    const earth = dbg.globe.markerRoot.children.find(
+      (c) => c.geometry?.type === 'SphereGeometry',
+    ) as unknown as { material?: { uniforms?: { uSunDir?: { value?: unknown } } } } | undefined
+    return Boolean(earth?.material?.uniforms?.uSunDir?.value)
   })
 }
 
@@ -279,5 +331,57 @@ export async function samplePixelBox(
         })
       }),
     { x, y, size },
+  )
+}
+
+/**
+ * 在 canvas 指定矩形区域内逐像素扫描，找出颜色落在目标色 ± tolerance（各通道独立）
+ * 范围内的像素，返回命中总数与**第一个命中像素**的坐标（设备像素，保证该坐标本身
+ * 就是一个命中像素——不用重心/平均坐标，因为对曲线状分布（如海岸线）重心未必落在
+ * 曲线上）。返回坐标可直接喂给 samplePixelBox 等函数复测同一像素在其他状态下的颜色。
+ * 用于 M2-15：黑盒定位 SPEC-3.2a pin 的某已知色（底面/海岸线/网格昼端色）在画布上的
+ * 实际渲染位置，不依赖透视投影计算或经纬度换算，也不解析渲染实现——只是把
+ * samplePixelBox 的"读一个像素"换成"读一个区域再按颜色筛选"。帧内同步读取的原因
+ * 与 samplePixelBox 一致（见其注释）。
+ */
+export async function findColorInRegion(
+  page: Page,
+  region: { x: number; y: number; width: number; height: number },
+  target: [number, number, number],
+  tolerance: number,
+): Promise<{ count: number; x: number; y: number } | null> {
+  return page.evaluate(
+    ({ region, target, tolerance }) =>
+      new Promise<{ count: number; x: number; y: number } | null>((resolve) => {
+        requestAnimationFrame(() => {
+          const canvas = document.querySelector('#globe-container canvas') as HTMLCanvasElement
+          const off = document.createElement('canvas')
+          off.width = canvas.width
+          off.height = canvas.height
+          const ctx = off.getContext('2d')!
+          ctx.drawImage(canvas, 0, 0)
+          const data = ctx.getImageData(region.x, region.y, region.width, region.height).data
+          let count = 0
+          let first: { x: number; y: number } | null = null
+          for (let py = 0; py < region.height; py++) {
+            for (let px = 0; px < region.width; px++) {
+              const i = (py * region.width + px) * 4
+              const r = data[i]
+              const g = data[i + 1]
+              const b = data[i + 2]
+              if (
+                Math.abs(r - target[0]) <= tolerance &&
+                Math.abs(g - target[1]) <= tolerance &&
+                Math.abs(b - target[2]) <= tolerance
+              ) {
+                count += 1
+                if (!first) first = { x: region.x + px, y: region.y + py }
+              }
+            }
+          }
+          resolve(count === 0 || !first ? null : { count, x: first.x, y: first.y })
+        })
+      }),
+    { region, target, tolerance },
   )
 }

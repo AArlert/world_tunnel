@@ -1,19 +1,32 @@
 import * as THREE from 'three'
 import { createAtmosphere } from './atmosphere'
+import { loadCoastline } from './coastline'
 import { GlobeControls, type CameraState } from './controls'
 import { createEarth } from './earth'
 import { latLonToVector3 } from './geo'
 import { createStarfield } from './starfield'
 import { sunDirectionModel } from './sun'
 import { createPlaceholderTextures, loadEarthTextures, type EarthTextures } from './textures'
+import { createVectorEarth } from './vectorEarth'
 
 const CAMERA_FOV = 45 // SPEC-3.1
 const CAMERA_FAR = 200 // 须容纳星空球壳（半径 60）+ 相机距离上限（SPEC-3.5）
 const SUN_UPDATE_MS = 60000 // SPEC-4.5 允许降频至 1 次/分钟
 
+/** 地表风格开关：默认矢量（SPEC-3.2②）；satellite 仅 DEV/测试显式启用（BUG-020 方案 a）。 */
+export interface GlobeSceneOptions {
+  satellite?: boolean
+}
+
+/** 地表底面统一接口：矢量地球与卫星地球都提供 sunDir 写入口，dispose 仅矢量侧需要。 */
+interface EarthSurface {
+  setSunDir(dir: THREE.Vector3): void
+  dispose?(): void
+}
+
 /**
- * 地球场景组合根：昼夜纹理 shader + 大气 + 星空 + sunDir 驱动（SPEC-3.1~3.6 / 4.5）
- * + 交互接线（SPEC-7.1~7.3、7.5，状态机在 controls.ts）。
+ * 地球场景组合根：地表底面（默认矢量，SPEC-3.2②/3.2a/3.3）+ 大气 + 星空 + sunDir 驱动
+ * （SPEC-3.1~3.6 / 4.5）+ 交互接线（SPEC-7.1~7.3、7.5，状态机在 controls.ts）。
  */
 export class GlobeScene {
   readonly scene = new THREE.Scene()
@@ -23,14 +36,15 @@ export class GlobeScene {
 
   private renderer: THREE.WebGLRenderer
   private controls: GlobeControls
-  private earth: ReturnType<typeof createEarth>
-  private textures: EarthTextures
+  private surface: EarthSurface
+  /** 仅卫星风格持有昼夜纹理；矢量默认下为 undefined（SPEC-3.2③ 大纹理退出默认加载路径） */
+  private textures?: EarthTextures
   private rafId = 0
   private resizeObserver: ResizeObserver
   private lastSunUpdate = 0
   private disposed = false
 
-  constructor(container: HTMLElement) {
+  constructor(container: HTMLElement, options: GlobeSceneOptions = {}) {
     this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true })
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
     container.appendChild(this.renderer.domElement)
@@ -45,16 +59,25 @@ export class GlobeScene {
     this.markerRoot = earthGroup
     this.scene.add(earthGroup)
 
-    // 纹理未就绪期先用深色占位渲染，无 loading UI（SPEC-3.2）
-    this.textures = createPlaceholderTextures()
-    this.earth = createEarth(this.textures)
-    earthGroup.add(this.earth.mesh)
+    if (options.satellite) {
+      // 卫星昼夜底图：非默认，仅 DEV/测试经 ?style=satellite 显式启用（BUG-020 方案 a）。
+      // 资产保留供天气风格包复用（SPEC-3.9），默认 boot 不走此路径、不下载大纹理（SPEC-3.2③/3.10）。
+      const textures = createPlaceholderTextures()
+      const earth = createEarth(textures)
+      this.textures = textures
+      this.surface = earth
+      earthGroup.add(earth.mesh)
+      void this.applySatelliteTextures(earth)
+    } else {
+      // 默认轻量矢量风格：海岸线 + 经纬网格 + 昼夜明暗，免大纹理（SPEC-3.2②/3.2a/3.3、SPEC-3.10）。
+      const vector = createVectorEarth(loadCoastline())
+      this.surface = vector
+      earthGroup.add(vector.object)
+    }
 
     this.scene.add(createAtmosphere())
     // 星空挂 scene 根，不受地球自转影响（SPEC-3.5）
     this.scene.add(createStarfield())
-
-    void this.applyTextures()
 
     this.resizeObserver = new ResizeObserver(() => this.resize(container))
     this.resizeObserver.observe(container)
@@ -103,10 +126,11 @@ export class GlobeScene {
     const now = performance.now()
     if (this.lastSunUpdate !== 0 && now - this.lastSunUpdate < SUN_UPDATE_MS) return
     this.lastSunUpdate = now
-    this.earth.setSunDir(sunDirectionModel(new Date()))
+    this.surface.setSunDir(sunDirectionModel(new Date()))
   }
 
-  private async applyTextures() {
+  /** 卫星风格专用：异步加载昼夜大纹理替换占位（仅 options.satellite 路径调用） */
+  private async applySatelliteTextures(earth: ReturnType<typeof createEarth>) {
     try {
       const loaded = await loadEarthTextures()
       if (this.disposed) {
@@ -115,13 +139,13 @@ export class GlobeScene {
         loaded.night.dispose()
         return
       }
-      this.textures.day.dispose()
-      this.textures.night.dispose()
+      this.textures?.day.dispose()
+      this.textures?.night.dispose()
       this.textures = loaded
-      this.earth.setTextures(loaded)
+      earth.setTextures(loaded)
     } catch (err) {
       // 加载失败不重试、不弹错误 UI，保持占位渲染（SPEC-3.2）
-      console.error('[globe] 地球纹理加载失败，保持占位渲染', err)
+      console.error('[globe] 卫星纹理加载失败，保持占位渲染', err)
     }
   }
 
@@ -139,6 +163,8 @@ export class GlobeScene {
     this.resizeObserver.disconnect()
     this.controls.dispose()
 
+    // 矢量地表的 LineSegments（海岸线/网格）不是 Mesh/Points，traverse 不覆盖，须显式释放
+    this.surface.dispose?.()
     this.scene.traverse((obj) => {
       if (obj instanceof THREE.Mesh || obj instanceof THREE.Points) {
         obj.geometry.dispose()
@@ -147,8 +173,8 @@ export class GlobeScene {
         else material.dispose()
       }
     })
-    this.textures.day.dispose()
-    this.textures.night.dispose()
+    this.textures?.day.dispose()
+    this.textures?.night.dispose()
 
     this.renderer.dispose()
     // dispose() 不释放 WebGL context；StrictMode/HMR 反复挂载会逼近浏览器 ~16 context 上限

@@ -19,6 +19,13 @@ const DEG = Math.PI / 180
 //   - SPEC-3.6「格林尼治（lat 0, lon 0）的球面标记必须落在昼纹理的非洲西侧几内亚湾
 //     位置（M1 校准场景验证）」。
 //
+// 卫星路径专属（REV-005 A3 再归属 / BUG-020）：本场景断言的是格林尼治标记落在**真实
+// 昼纹理**（earth_day.jpg）的非洲西侧几内亚湾位置（SPEC-3.6），这是卫星等距圆柱纹理的
+// 地理内容判据，矢量默认风格（SPEC-3.2②）无该纹理、无可比对的"几内亚湾位置"。故本文件
+// 经 `?style=satellite` 显式走 DEV-only 卫星路径（src/App.tsx、BUG-020 方案 a），
+// 生产默认（矢量）不受影响；渲染稳定门保持 waitForRealEarthTexture（读卫星专属的
+// uDayMap，卫星路径下才有意义）。
+//
 // sunDir 受控注入（避免真实时刻偶发红）：
 // testplan M1-05 原文即写"给定已知 sunDir"，真实时刻的 sunDir 由 SPEC-4.5 的太阳位置
 // 模型驱动，格林尼治在任意给定时刻都可能落在夜半球，若不控制会导致本场景偶发失败。
@@ -42,7 +49,7 @@ test.describe('M1-05 昼夜混合晨昏线与格林尼治校准', () => {
     // 余量不足，参照 e2e/starfield.spec.ts 已有的 test.setTimeout 用法放宽
     test.setTimeout(90_000)
     await page.bringToFront()
-    await page.goto('/')
+    await page.goto('/?style=satellite')
     await waitForGlobeDebug(page)
     await waitForRealEarthTexture(page)
 
@@ -189,7 +196,7 @@ test.describe('M1-05 昼夜混合晨昏线与格林尼治校准', () => {
     page,
   }) => {
     await page.bringToFront()
-    await page.goto('/')
+    await page.goto('/?style=satellite')
     await waitForGlobeDebug(page)
     await waitForRealEarthTexture(page)
 

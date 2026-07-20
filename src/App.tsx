@@ -5,7 +5,11 @@ export function App() {
   const containerRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    const scene = new GlobeScene(containerRef.current!)
+    // DEV/测试专用：?style=satellite 显式走卫星风格路径（BUG-020 方案 a），生产忽略、默认矢量
+    const satellite =
+      import.meta.env.DEV &&
+      new URLSearchParams(window.location.search).get('style') === 'satellite'
+    const scene = new GlobeScene(containerRef.current!, { satellite })
     return () => scene.dispose()
   }, [])
 

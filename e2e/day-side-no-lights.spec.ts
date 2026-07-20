@@ -86,6 +86,13 @@ function sunDirForLon(t: number, lonDeg: number) {
   }
 }
 
+// 卫星路径专属（REV-005 A3 再归属 / BUG-020）：本场景通过改写 `uNightGain` uniform
+// 观察昼/夜侧像素响应差异，该 uniform 只存在于卫星昼夜 shader（src/globe/shaders/earth.ts，
+// SPEC-3.3「亮度增益 ≥1.5」的机械化实现）；矢量默认风格（SPEC-3.2a）以 `uGlowStrength`/
+// `uGlowColor` 表达夜面辉光，不含 `uNightGain` 这一增益 uniform，两者结构不同不可互测。
+// 故本文件经 `?style=satellite` 显式走 DEV-only 卫星路径（src/App.tsx、BUG-020 方案 a），
+// 生产默认（矢量）不受影响；渲染稳定门保持 waitForRealEarthTexture（读卫星专属的
+// uDayMap，卫星路径下才有意义）。
 test.describe('M1-14 昼半球不叠加夜景灯光', () => {
   test('昼侧取样点不随 uNightGain 变化、夜侧随之变化（SPEC-3.3 第二句 + SPEC-3.2）', async ({
     page,
@@ -94,7 +101,7 @@ test.describe('M1-14 昼半球不叠加夜景灯光', () => {
     // 单次往返明显变慢，默认 30s 余量不足（放宽方式与既有 e2e 用例一致）
     test.setTimeout(90_000)
     await page.bringToFront()
-    await page.goto('/')
+    await page.goto('/?style=satellite')
     await waitForGlobeDebug(page)
     await waitForRealEarthTexture(page)
 
@@ -164,7 +171,7 @@ test.describe('M1-14 昼半球不叠加夜景灯光', () => {
   }) => {
     test.setTimeout(90_000)
     await page.bringToFront()
-    await page.goto('/')
+    await page.goto('/?style=satellite')
     await waitForGlobeDebug(page)
     await waitForRealEarthTexture(page)
 
