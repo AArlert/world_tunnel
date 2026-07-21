@@ -486,3 +486,42 @@ export async function sampleMarkerCount(page: Page): Promise<number> {
     return markerGroup.children[0]?.count ?? 0
   })
 }
+
+/**
+ * BUG-022 复验用：在 canvas 指定矩形区域内统计"近白/饱和"像素——三通道同时 ≥ minChannel
+ * 的像素（即 min(R,G,B) ≥ minChannel）。纯白 (255,255,255) 与近白不属 SPEC-3.7 六分类色
+ * 表中任何分类色（该表六色的 min 通道均 ≤ 127），也不属两分类色普通透明混合的结果（红缺
+ * 蓝绿、蓝缺红，凸组合无法令三通道同高），故区域内成片出现近白像素即"脉冲环加色混合
+ * 饱和成白"缺陷的判别特征。返回近白像素数 `count` 与区域内 min(R,G,B) 的最大值 `peak`
+ * （供断言失败时定位实际最白像素的饱和程度）。帧内同步读取的原因与 samplePixelBox 一致
+ * （见其注释）。阈值 minChannel 的取值依据由调用方从 SPEC-3.7 推导，本函数不预设。
+ */
+export async function countNearWhite(
+  page: Page,
+  region: { x: number; y: number; width: number; height: number },
+  minChannel: number,
+): Promise<{ count: number; peak: number }> {
+  return page.evaluate(
+    ({ region, minChannel }) =>
+      new Promise<{ count: number; peak: number }>((resolve) => {
+        requestAnimationFrame(() => {
+          const canvas = document.querySelector('#globe-container canvas') as HTMLCanvasElement
+          const off = document.createElement('canvas')
+          off.width = canvas.width
+          off.height = canvas.height
+          const ctx = off.getContext('2d')!
+          ctx.drawImage(canvas, 0, 0)
+          const data = ctx.getImageData(region.x, region.y, region.width, region.height).data
+          let count = 0
+          let peak = 0
+          for (let i = 0; i < data.length; i += 4) {
+            const m = Math.min(data[i], data[i + 1], data[i + 2])
+            if (m > peak) peak = m
+            if (m >= minChannel) count += 1
+          }
+          resolve({ count, peak })
+        })
+      }),
+    { region, minChannel },
+  )
+}
