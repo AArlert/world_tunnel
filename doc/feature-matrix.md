@@ -12,9 +12,9 @@
 | FM-04 | M1 | 地球交互 | src/globe/（拖拽/缩放/惯性/自转；SPEC-7.1/7.2/7.3/7.5。SPEC-7.4 未交付，拆挂 FM-07+FM-14） | M1-09, M1-10, M1-11 |
 | FM-05 | M2 | 数据核心 | src/data/（GeoEvent/scheduler/缓存/去重/过期；SPEC-5.0, 5.0a, 6.1, 6.2, 6.3） | M2-01, M2-02, M2-03, M2-04, M2-09 |
 | FM-06 | M2 | T1 信源 | src/data/providers/（USGS/EONET/GDACS/LL2；SPEC-5.1, 5.2, 5.3, 5.5, 5.8-T1） | M2-05, M2-06, M2-07, M2-08 |
-| FM-07 | M2 | 事件标记 + 面板 | src/globe/ 标记层 + src/ui/ 事件流面板（SPEC-2.2, 3.7, 3.8；SPEC-3.4 不遮挡真标记回补；SPEC-7.4 列表↔标记联动分片） | M2-10, M2-11, M2-12, M2-13, M2-14, M2-22, M3-01, M3-02, M3-03, M3-04, M3-05, M3-06 |
+| FM-07 | M2 | 事件标记 + 面板 | src/globe/ 标记层 + src/ui/ 事件流面板（SPEC-2.2, 3.7, 3.8；SPEC-3.4 不遮挡真标记回补；SPEC-7.4 列表↔标记联动分片。**动效批 D27/BUG-031：SPEC-3.7a 光柱形态与静态体积辉光、SPEC-3.7b 静态新鲜度、SPEC-3.7c 标记 LOD 聚合——dev 实现待动效批 design-prompt**） | M2-10, M2-11, M2-12, M2-13, M2-14, M2-22, M3-01, M3-02, M3-03, M3-04, M3-05, M3-06 |
 | FM-08 | M2 | 矢量默认风格 | src/globe/ 矢量昼夜风格，替换卫星默认（SPEC-3.2 重写, 3.3） | M2-15, M2-16, M2-17 |
-| FM-09 | M2 | 缓存优先启动 | src/data/ 启动缓存 + 呼吸式过渡（SPEC-3.11, 8.4） | M2-20, M2-21, M2-25 |
+| FM-09 | M2 | 缓存优先启动 | src/data/ 启动缓存 + 呼吸式过渡（SPEC-3.11, 8.4；**SPEC-3.11a reduced-motion P1 降级——稳态无动画、增量呼吸瞬切，SPEC-3.11 呼吸本身不改**） | M2-20, M2-21, M2-25 |
 | FM-10 | M2 | 顶栏 + 基础分类过滤 | src/ui/（品牌名 Worlens · UTC 时钟 · 六 category 开关；SPEC-2.1, 2.4①, 8.1 分类子集） | M2-18, M2-19 |
 | FM-11 | M2 | 性能预算基线 | 首包/冷启动基线量测（SPEC-3.10 基线, 3.8） | M2-23, M2-24 |
 | FM-12 | M3 | 扩展信源 | providers/（GDELT/CoinGecko；SPEC-5.4, 5.7；SPEC-5.10：GDELT 归「新闻报道（待验证）」，分级由 `source` 经表派生，provider 不加字段。**OpenSky 航班图层（SPEC-5.6）与 SPEC-6.3① flight-60s 已移出 M3、改挂 M6 FM-27——REV-016/BUG-017 裁定原生端专属**） | （M3 开卡登记） |
