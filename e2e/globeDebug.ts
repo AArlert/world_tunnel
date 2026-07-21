@@ -532,6 +532,50 @@ export async function sampleMarkerInstances(
 }
 
 /**
+ * M3-03 用：黑盒读取标记层「环」实例（脉冲/柔光光环层）的当前均匀缩放 scale 与模型空间平移。
+ * SPEC-3.7 发光通道分层（sev1 无辉光 / sev2 静态柔光环 / sev3 持续脉冲环）为对外可见硬判据，
+ * REV-013 §3.1 明示「发光通道……直接断存在性」。环是否被渲染取决于其实例矩阵的均匀缩放
+ * （scale=0 即不可见、无环；scale>0 且恒定 = 静态环；scale>0 且随时间起伏 = 脉冲环）——本函数
+ * 只读该 scale 的存在性/时变性，不断言其具体数值（环尺寸/脉冲幅度属实现自由度，SPEC-3.7）。
+ *
+ * 定位方式与 sampleMarkerInstances 同一手法：markerRoot 下唯一 Group 的**第二个**子节点
+ * （dots=children[0] 是标记点、rings=children[1] 是光环层，见 src/globe/markers.ts 两层
+ * InstancedMesh 结构），读其 instanceMatrix 公开数组。均匀缩放 = 上左 3×3 首列向量长度
+ * `sqrt(m0²+m1²+m2²)`（compose(pos,quat,scale) 下各列长度均等于 scale）；平移取矩阵第
+ * 12/13/14 元素（= 标记落点，供按 lat/lon 识别是哪一档 severity 的环）。只读 three.js 标准
+ * InstancedMesh API，不触碰 MarkerLayer 私有字段、不读取任何实现常量。
+ */
+export async function sampleMarkerRings(
+  page: Page,
+): Promise<{ scale: number; tx: number; ty: number; tz: number }[]> {
+  return page.evaluate(() => {
+    const dbg = (window as unknown as { __globeDebug: DebugHook }).__globeDebug
+    const markerGroup = dbg.globe.markerRoot.children.find(
+      (c) => (c as unknown as { type?: string }).type === 'Group',
+    ) as unknown as
+      | { children: { count: number; instanceMatrix: { array: ArrayLike<number> } }[] }
+      | undefined
+    if (!markerGroup) throw new Error('标记层根节点（Group）未在 markerRoot.children 中找到')
+    const rings = markerGroup.children[1]
+    if (!rings) throw new Error('光环层（rings，Group 第二个子节点）未找到')
+    const m = rings.instanceMatrix.array
+    const out: { scale: number; tx: number; ty: number; tz: number }[] = []
+    for (let i = 0; i < rings.count; i++) {
+      const m0 = m[i * 16]
+      const m1 = m[i * 16 + 1]
+      const m2 = m[i * 16 + 2]
+      out.push({
+        scale: Math.sqrt(m0 * m0 + m1 * m1 + m2 * m2),
+        tx: m[i * 16 + 12],
+        ty: m[i * 16 + 13],
+        tz: m[i * 16 + 14],
+      })
+    }
+    return out
+  })
+}
+
+/**
  * M2-21 用：黑盒读取标记层根 Group 的直接子节点数。SPEC-3.8「标记用 instancing/点精灵，
  * 不逐事件建 Mesh」——markers.ts 以 dots + rings 两层 InstancedMesh 承载全部标记，子节点
  * 数恒为 2、不随事件数增长。用于验证增删（呼吸过渡）过程中仍保持 instancing、不整表
@@ -546,6 +590,63 @@ export async function markerGroupChildCount(page: Page): Promise<number> {
     if (!g) throw new Error('标记层根节点（Group）未在 markerRoot.children 中找到')
     return g.children.length
   })
+}
+
+/**
+ * M3-02 用（C-2 量测方法「亮像素排除阈值」）：以 (x,y) 为中心读取 size×size 取样框，逐子像素
+ * 计算 **gamma 编码 Rec.709 luma**（`0.2126R'+0.7152G'+0.0722B'`，直接对 0–255 sRGB 值加权、
+ * 不线性化，与 aes §0 基线同法、REV-013 C-2 定死的亮度定义），排除 luma 高于 `brightLumaThreshold`
+ * 的结构性亮像素（如海岸线/网格/标记），返回剩余像素的平均 sRGB 与被排除数 `excluded`/总数 `total`。
+ * 昼夜半球对比的底面采样须排除结构线像素、只量底面本身，此为 C-2「亮像素排除阈值」的落地。
+ * 帧内同步读取的原因与 samplePixelBox 一致（见其注释）。阈值取值依据由调用方从量测几何推导、
+ * 在测试注释定稿，本函数不预设。
+ */
+export async function sampleBoxExcludingBright(
+  page: Page,
+  x: number,
+  y: number,
+  size: number,
+  brightLumaThreshold: number,
+): Promise<{ r: number; g: number; b: number; excluded: number; total: number }> {
+  return page.evaluate(
+    ({ x, y, size, brightLumaThreshold }) =>
+      new Promise<{ r: number; g: number; b: number; excluded: number; total: number }>((resolve) => {
+        requestAnimationFrame(() => {
+          const canvas = document.querySelector('#globe-container canvas') as HTMLCanvasElement
+          const off = document.createElement('canvas')
+          off.width = canvas.width
+          off.height = canvas.height
+          const ctx = off.getContext('2d')!
+          ctx.drawImage(canvas, 0, 0)
+          const half = Math.floor(size / 2)
+          const sx = Math.min(Math.max(0, Math.round(x) - half), canvas.width - 1)
+          const sy = Math.min(Math.max(0, Math.round(y) - half), canvas.height - 1)
+          const w = Math.max(1, Math.min(size, canvas.width - sx))
+          const h = Math.max(1, Math.min(size, canvas.height - sy))
+          const data = ctx.getImageData(sx, sy, w, h).data
+          let r = 0
+          let g = 0
+          let b = 0
+          let kept = 0
+          let excluded = 0
+          const total = data.length / 4
+          for (let i = 0; i < data.length; i += 4) {
+            const luma = 0.2126 * data[i] + 0.7152 * data[i + 1] + 0.0722 * data[i + 2]
+            if (luma > brightLumaThreshold) {
+              excluded += 1
+              continue
+            }
+            r += data[i]
+            g += data[i + 1]
+            b += data[i + 2]
+            kept += 1
+          }
+          const n = kept > 0 ? kept : 1
+          resolve({ r: r / n, g: g / n, b: b / n, excluded, total })
+        })
+      }),
+    { x, y, size, brightLumaThreshold },
+  )
 }
 
 /**
