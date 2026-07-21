@@ -14,6 +14,7 @@
 | 2026-07-21 | v0.2.2 | G-2/G-3 字段映射 pin（提案 design-prompt/proposal-gdacs-ll2.md，REV-008 放行）：SPEC-5.3 全文替换（eventid 分组、Point 中心点包围盒坐标、字段来源实证、humanitarian 判类=eventtype∈{DR,FL}——原「人道响应字段」实测不存在被迫重写、UTC 解析陷阱）；SPEC-5.5 全文替换（端点换 mode=detailed、pad 坐标、urls 回落链、ts=net）。SPEC-6.3 清扫语义不在本次（BUG-018 独立路径） |
 | 2026-07-21 | v0.2.3 | 过期清扫语义与 severity 方向性（REV-009 两裁）：SPEC-6.3① 重写——过期基准改为 lastSeen（最后被 upsert 的墙钟时刻），ts 仅展示/排序，冷启动沿用持久化 lastSeen（BUG-018 spec 前置，提案 design-prompt/proposal-expiry-semantics.md）；SPEC-5.5 severity 子条补句——仅未来方向计入，net 已过去归 1 档（BUG-019） |
 | 2026-07-21 | v0.2.4 | M2 视觉层前置（M2-globe DP 提案 P-1/P-2，REV-010 裁准）：新增 SPEC-3.2a 矢量默认风格视觉参数（深色底/青蓝海岸线/30° 网格/夜面辉光）；新增 SPEC-2.2a 事件流面板列表行（分类色圆点+标题+相对时间、ts 倒序、空状态）。SPEC-7.4 双向联动 M2 取全双向（REV-010 §2.4 裁准，正文不改） |
+| 2026-07-21 | v0.2.8 | 噪声门槛与事件流语义（提案 design-prompt/proposal-event-noise-severity.md + proposal-stream-order.md，REV-012 裁准）：新增 SPEC-5.0a 呈现门槛跨源通则（亚门槛事件不入球不入流，球/列表共用呈现集）；SPEC-5.1 整条替换——USGS 换 M2.5+ 显著性 feed（源侧门槛 M≥2.5，BUG-023）；SPEC-2.2a 整条替换——排序改「距 now 时间邻近度升序」（BUG-024）+ 行内 severity 三档单调非色相编码、数值不作显式元素（BUG-025，造型值待 D25 定）。同步 testplan：M2-05/M2-13 判据改写回退 🔲 重测，新增 M2-22（排序邻近度）、M3-01（severity 单调编码，D25 定值前禁 ✅） |
 
 ## 1. 产品概述
 
@@ -30,7 +31,7 @@
 
 - **SPEC-2.1** 顶栏（48px）：品牌名「**Worlens**」（M2）· 加密行情 ticker（M3，SPEC-5.7）· **UTC 时钟（M2，实时刷新，格式 HH:MM:SS UTC）**。
 - **SPEC-2.2** 主区：全屏地球 canvas；右侧悬浮事件流面板（宽 300px，可折叠）。
-- **SPEC-2.2a** 事件流面板列表行：SPEC-2.2 事件流面板的每个列表行显示三项——① 分类色圆点（取 SPEC-3.7 对应 category 色）；② 事件标题（SPEC-6.1 `title`）；③ 相对时间（由 SPEC-6.1 `ts` 相对当前时刻派生，如「3 分钟前」，格式细节属实现自由度）。列表按 `ts` 倒序（最新在上，与「事件流」语义一致；`ts` 仅供展示/排序，SPEC-6.3①）。无事件时显示空状态文案「暂无事件」。severity、地点、摘要、信源等完整字段属详情卡（SPEC-2.3，M3），不进列表行。
+- **SPEC-2.2a** 事件流面板列表行：SPEC-2.2 事件流面板的每个列表行显示三项——① 分类色圆点（取 SPEC-3.7 对应 category 色）；② 事件标题（SPEC-6.1 `title`）；③ 相对时间（由 SPEC-6.1 `ts` 相对当前时刻派生，如「3 分钟前」，格式细节属实现自由度）。**行的整体视觉轻重编码事件 severity（SPEC-6.1，severity∈{1,2,3}）**：跨三档**单调递增**——severity 1 最轻（弱化、注意力最低）、severity 3 最重（最突出）；编码**仅用非色相通道**（尺寸/字重/透明度/行密度等），**色相仅表分类（SPEC-3.7），severity 不引入任何新增色语义**（与 marker 侧 SPEC-3.7「尺寸/脉冲随级递增」同原则，避免 BUG-022 式第二色语义）；**具体承载通道与其取值由 D25 审美官方案定（待 D25 定值）**。**列表按「距当前时刻 `now` 的时间邻近度」升序排序（`now` 与③相对时间同源、随之刷新）：主排序键为 `|ts − now|`，值越小（离当前时刻越近——无论刚发生的过去事件，还是临近发生的未来事件如发射倒计时）越靠前，值越大（越久远的过去或越遥远的未来）越靠后；`|ts − now|` 相等时未来事件（`ts > now`）先于过去事件（`ts ≤ now`），仍并列者按 `id` 升序稳定排序以保确定性。全部为过去事件时该规则等价于 `ts` 倒序（最新在上，保留「事件流」直觉）；全部为未来事件时等价于最近发生者在上（倒计时序）。`ts` 仅供展示/排序、不参与过期判定（SPEC-6.3①）。** 无事件时显示空状态文案「暂无事件」。severity 的**数值/文字/徽章不作为显式行元素**（其数值展示属详情卡 SPEC-2.3，M3）——行内仅以上述视觉轻重环境式编码 severity 档位，不新增可读元素；地点、摘要、信源等完整字段属详情卡（SPEC-2.3，M3），不进列表行。列表所呈现的事件集受 SPEC-5.0a 呈现门槛约束。
 - **SPEC-2.3** 事件详情卡：点击球面标记或列表条目弹出浮层——标题、分类徽章、severity、时间（相对+绝对）、地点、摘要、信源链接列表（≥1 条）。
 - **SPEC-2.4** 过滤与设置：①**基础分类过滤**（六 category 开关）前移至 M2，作为首屏可见控件（不进设置面板）；②设置入口（M4）：watchlist 管理、高级过滤、图层开关（航班）、**风格包切换（SPEC-3.9）**；③设置面板**不含**「摘要模式（信源/Claude）」——AI 摘要后置为付费能力（§9、SPEC-8.5）。
 - **SPEC-2.5** 搜索（M3）：入口为事件流面板（SPEC-2.2）顶部搜索框。范围仅限**当前本地缓存事件**（标题/信源名/已解析地名字段）与**本地地名 gazetteer**（与 SPEC-5.8 T2 同一份精简 GeoNames）；不发起网络请求、不做全文检索（与 §9 一致）。命中事件 → 定位到球面对应标记并可打开详情卡（SPEC-2.3，飞行走 SPEC-7.4）；命中地名 → 相机飞至该坐标（SPEC-7.4）。无匹配时给明确空状态提示（如「当前缓存内无匹配」）。
@@ -86,10 +87,12 @@
 
 统一约束：**SPEC-5.0** 每源独立轮询与限流预算；HTTP 失败指数退避（基础间隔×2^n，上限 30min）；支持 ETag/Last-Modified 的源带条件请求；任何源故障不得影响其他源与渲染。
 
+- **SPEC-5.0a 呈现门槛（surfacing floor，跨源统一约束）**：每源可声明一个**显著性门槛**；仅达到/高于门槛的归一化事件进入**呈现集**——同时决定球面标记（§3）与事件流列表（SPEC-2.2/2.2a）是否出现该事件，**球面与列表共用同一呈现集**（维持 SPEC-2.2「事件流」对球面的从属语义）。低于门槛的事件**既不入球也不入流**。门槛以最省的可用手段实现——源侧提供预筛（feed/查询参数）时优先源侧（见 SPEC-5.1），否则客户端谓词过滤；**实现位置属实现自由度**，对外契约仅为「亚门槛事件不呈现」。**无噪声问题的源不声明门槛（呈现全部事件）**：EONET/GDACS/LL2 现均无门槛。新增或变更任一源的门槛属 spec 变更（§7），须以**实证噪声**为据。呈现门槛只做**准入**（二值 in/out），与密集区**聚合**（D23 L0）、列表行 severity **轻重编码**（SPEC-2.2a）分属不同机制、互不替代。
+
 - **SPEC-5.1 USGS 地震** → category `disaster`
-  - `https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_hour.geojson`（启动时先拉 `all_day.geojson` 回填）
+  - `https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/2.5_hour.geojson`（启动时先拉 `2.5_day.geojson` 回填）——采用 USGS **M2.5+ 显著性 feed**，在源侧滤除 M<2.5 仪器级微震，兑现 SPEC-5.0a 呈现门槛（**USGS 门槛 = M≥2.5**）并降低载荷（SPEC-3.10）。
   - 轮询 60s。映射：`id=usgs:{feature.id}`；title=`M{mag} {place}`；lat/lon=geometry；ts=properties.time；url=properties.url。
-  - severity：mag<4.5→1，4.5≤mag<6→2，mag≥6→3。
+  - severity：mag<4.5→1，4.5≤mag<6→2，mag≥6→3（2.5 feed 下 severity 1 区间收窄为 [2.5,4.5)，映射规则本身不变）。
 - **SPEC-5.2 NASA EONET 自然事件** → category `disaster`
   - `https://eonet.gsfc.nasa.gov/api/v3/events?status=open&days=7`，轮询 300s。
   - 映射：`id=eonet:{event.id}`；坐标取 geometry 数组中**时间最新**的一条——其 `type` 为 `Point` 时取该点 `[lon, lat]`；为 `Polygon`/`MultiPolygon` 时取该 geometry **全部坐标点的经纬度包围盒中心** `((minLon+maxLon)/2, (minLat+maxLat)/2)` 作为 (lat, lon)（`Point` 为其单点退化情形）。该降维为可视化落点近似、不追求面积质心；跨 ±180° 经线的多边形（EONET 极罕见）落点可能偏移，属已知限界，如需可后续另行提案精化。categories[0].title 进 summary；sources[].url 为信源。severity 默认 2。
