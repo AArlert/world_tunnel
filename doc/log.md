@@ -1,5 +1,11 @@
 # log — 交接日志（新的在上；仓库内最多 4 块，超限 `make docs-archive`）
 
+## [0.3.0] 2026-07-21 M3 起点——D22 最小信任层 spec 化闭环
+- **做了什么**：M2 关门后启动 M3。① research 新实例核查 D22 两项硬前置：GDELT 确有中文源收录+专门中文地理编码管线，但**蓝点网不在 GDELT 索引内**（架构角色错配——GDELT 只对自爬语料地理编码，非任意文本/URL 通用服务，与语言覆盖度无关），已更正 `doc/product-decisions.md` D14 修订②的因果框设，NewsGlobe 中文 feed 交互式实测因调研工具无表单能力仍未闭合。② arch 新实例交付 `doc/design-prompt/proposal-trust-tier.md`（D22 提案）：新增 SPEC-5.10 信源信任分级（权威事件源/新闻报道待验证两级，由 `source` 经表派生、不入 GeoEvent 模型，与 SPEC-5.8 T1–T4 解耦为正交轴）+ 改写 SPEC-2.3 详情卡（信源名+等级、时间语义=复用 `ts`、去重呈现=单事件 `urls[]` 计数、轻量纠错入口=mailto/issue 零服务器）。③ rev 新实例仲裁 `REV-015-trust-tier-arbitration.md`：**通过**，附 1 处必落实文本修正 M-1（去重呈现句纠正「多信源」失真措辞为「单一信源多链接」并禁「N 个信源」式跨源暗示）+ R-1（GDELT `ts=seendate` 映射前向 pin 留待 M3 GDELT 接入卡）+ R-2（testplan 时间断言口径限制）。④ orch 应用：spec.md 新增 SPEC-5.10+改写 SPEC-2.3（含 M-1 修正）+ §0 修改记录，`make pin-spec`，`make bump MILESTONE=M3`（0.2.23→0.3.0）。⑤ arch/qa 各起新实例并行下游同步：feature-matrix FM-12/13/14/25 交付物列追加信任层同步内容；testplan 新增 M3-07~M3-10 四行（映射单测/详情卡展示/纠错入口/L0 负向），均 🔲 占位、断言口径遵守 R-2。
+- **证据**：`doc/research/gdelt-newsglobe-zh-prereq-202607.md`（调研报告）、`doc/design-prompt/proposal-trust-tier.md`（提案）、`doc/review/REV-015-trust-tier-arbitration.md`（仲裁记录）、`doc/spec.sha256`（pin-spec 重钉）、`doc/testplan.md` M3-07~M3-10（登记，非测试证据——尚无 src/ 实现，dev 卡未派）。本轮无 src/tests 改动，不涉及 make regress。
+- **问题**：① D14 修订②原「GDELT 中文覆盖不足→T3 不成立」的因果表述已被本轮核查证伪并更正，但更正只记于 product-decisions.md，尚未反推 FM-13/FM-12 的 T2/T3/T4 选型（蓝点网类自订 RSS 走 T2 还是 T4，留待 FM-12/13 开卡时 arch 裁定，倾向 T4 因头条显式地名稀少）；② NewsGlobe 中文 feed 交互式实测（D14 硬前置①）连续两轮未闭合，受限于调研工具无浏览器自动化能力，需人工手测或换调研手段；③ R-1（SPEC-5.4 GDELT `ts` 映射）尚未落 pin，M3-08 时间语义断言范围届时可能需复核。
+- **下一步**：M3 详情卡 dev 卡待派（需 arch 先出 M3 详情卡 design-prompt，重大模块须过 rev 门禁，见 proposal-trust-tier.md §4.2）；GDELT provider 接入（FM-12）落 SPEC-5.4 `ts` 映射时一并处理 R-1；其余排队项——BUG-017 OpenSky CORS 仲裁、BUG-016 flight-60s 场景登记（均待 FM-12 开卡）、动效批（BUG-031/D27，aes 先行设计）、视觉第二批（BUG-032/M3-06，aes 先行设计）。
+
 ## [0.2.23] 2026-07-21 BUG-010 flake 家族治理+三缺陷收官——e2e 稳定性达标,签核前置全清
 - **做了什么**：① qa BUG-010 治理卡(限额中断,orch 回收核对补验):8 个 e2e spec 负载敏感采样加固(idle-spin/day-night-calibration/zoom-range/drag-inertia/marker-breathing/marker-severity-tri-channel/panel-marker-linkage)+globeDebug 新增 125 行稳健采样 helper,断言强度未降;BUG-010 置 CLOSED 挂机械证据(全量 e2e 绿 log)。**中断实例未交汇报,orch 依纪律不采信其口头压力轮次,自行补跑两轮全量 e2e(默认 8-worker)均 PASS——合计三轮全并发绿,关单核验成立**;docs-check OK、bugs.md 表未损坏。② orch 依核对记录(doc/evidence/v0.2.22/BUG-028-033-verification.md,独立 qa 正反两向+判别力抽查全 PASS)置 BUG-028/033 CLOSED。
 - **证据**：doc/evidence/v0.2.22/BUG-010.log(机械生成)、BUG-028-033-verification.md;orch 补跑 test-results/e2e_all.log 两轮 PASS。
@@ -12,9 +18,3 @@
 - **证据**：本切片 dev 自检:docs-check OK、make handover/next 输出零回归、lint PASS;两缺陷验证命令与结果详见 bugs.md 回填段。复验归独立 qa(核对记录型,scripts 无 vitest 覆盖,工具侧限制见 BUG-015)。
 - **问题**：① BUG-033 分句启发式依赖现台账措辞,新写法出现时需再细化(注释已声明);② BUG-028 检查仅在「场景全 ✅」分支内生效,场景未全绿时零场景 FM 行不提前可见(与登记期望落点一致,扩大可见性需另登缺陷);③ scripts 无机械回归覆盖属系统性风险(dev 建议评估,orch 暂记流程债不立即立项);④ BUG-036 未修,M2 签核走显式重跑。
 - **下一步**：并行:qa 核对记录卡(BUG-028/033 复验,§5.3-4 口径)、qa BUG-010 flake 家族治理卡;毕后显式 make regress+evidence REGRESS=1+M2 重签核(新 rev 实例)→ tag。
-
-## [0.2.21] 2026-07-21 FM-11 基线落地+缓存生命周期双缺陷闭环——M2 场景全绿
-- **做了什么**：① qa FM-11 卡:M2-23(tests/build-budget.test.ts,首包 raw 810.7KB/gzip 225.1KB 入证据,卫星纹理 2.54MB 物理隔离不计首包)、M2-24(e2e/cold-start-perf.spec.ts,冷启动→可交互 ~300ms、缓存上屏 ~200ms、帧率 ~61fps,vite preview 生产服基线,门禁留 M5),双 ✅——**M2 全部场景就此全绿**;vite.config.ts 补 test.reporters 修 vitest 非 TTY 不回显 console 问题。② 量测中挖出 BUG-034(StrictMode 双调用下 stop() 在 cache.load 未 settle 时空快照覆写 IndexedDB,数据丢失级,dev server 100% 复现、production 不受影响):dev 修复(cacheLoaded 闸门)→ qa 判别力核查复验关单;复验扩检查点又挖出 BUG-035(早停实例晚到 load 翻闸门,二次 stop 复活覆写):dev 修复(闸门翻转收进 !stopped 块)→ 新 qa 实例判别力核查复验关单。两缺陷均 CLOSED,每层有故意红复现测试钉住后修绿。③ BUG-010 第三轮观察面扩充(高并发下 marker-severity-tri-channel 新增像素误读一例)。
-- **证据**：doc/evidence/v0.2.20/M2-23.log、M2-24.log、BUG-034.log、BUG-035.log(均机械生成);全量单测 179/179、lint PASS;判别力核查两轮(还原修复→红,恢复→绿,diff 逐字节一致)。
-- **问题**：① BUG-035 遗留可选加固点:正常实例重复 stop 属幂等重复写非数据丢失,未补断言(qa 判定非阻塞);② e2e 层 StrictMode 真实浏览器检查点未做(成本高,列遗留);③ M2-24 数值系本机 vite preview,M5 须按真实验收环境重测;④ 全量 e2e 高并发 flake(BUG-010 家族已扩至 3 例)是 REGRESS 100% 的直接威胁,签核前必须处置。
-- **下一步**：dev 卡 BUG-028+BUG-033(scripts 修复窗,期间不派用 evidence 的卡);qa 卡 BUG-010 flake 家族治理(负载敏感断言加固);REGRESS=1+M2 重签核(新 rev 实例)→ tag;动效批(BUG-031/D27)与视觉第二批(BUG-032/D24)待 M2 关后立项。
