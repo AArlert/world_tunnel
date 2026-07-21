@@ -26,6 +26,9 @@ export function createDataLayer(): DataLayer {
   const cache = new EventCache()
 
   let stopped = false
+  // 初始 cache.load() 是否已成功 settle：未 settle 前 store 必为空，
+  // 此时落盘会用空快照覆写已有真实缓存（BUG-034），故据此闸门 stop() 的持久化。
+  let cacheLoaded = false
   let persistTimer: ReturnType<typeof setTimeout> | null = null
 
   // 去抖持久化：合并同窗口内的多次变更为一次落盘（SPEC-8.4）
@@ -54,7 +57,14 @@ export function createDataLayer(): DataLayer {
       //    缓存读取失败不阻塞启动（SPEC-8.4 不承诺离线数据完整性）。
       try {
         const cached = await cache.load()
-        if (!stopped && cached.length > 0) store.load(cached)
+        // 仅当本实例未被早停时才回填并开闸：早停实例（stop() 抢在 load settle 前执行）
+        // 的 store.load 被跳过、store 从未反映持久层，其晚到的 settle 不得把 cacheLoaded
+        // 翻为 true；否则二次 stop() 会用空快照覆写清空共享缓存（BUG-035，与 BUG-034 闸门语义自洽）。
+        if (!stopped) {
+          if (cached.length > 0) store.load(cached)
+          // 读取成功且回填已发生：store 现已反映持久层，stop() 落盘不会丢已有数据（SPEC-3.11）。
+          cacheLoaded = true
+        }
       } catch (err) {
         console.error('[data] 事件缓存读取失败，跳过回填', err)
       }
@@ -68,10 +78,13 @@ export function createDataLayer(): DataLayer {
         clearTimeout(persistTimer)
         persistTimer = null
       }
-      // 落一次持久化（DP §3.6）
-      void cache.persist(store.entriesForPersist()).catch((err) => {
-        console.error('[data] 停机持久化失败', err)
-      })
+      // 落一次持久化（DP §3.6）；但初始回填未完成前 store 必为空，
+      // 落盘会用空快照清空已有缓存（BUG-034，破坏 SPEC-3.11 前提），故跳过。
+      if (cacheLoaded) {
+        void cache.persist(store.entriesForPersist()).catch((err) => {
+          console.error('[data] 停机持久化失败', err)
+        })
+      }
     },
   }
 }

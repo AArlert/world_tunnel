@@ -1,3 +1,4 @@
+{"date": "2026-07-21", "version": "0.2.21", "milestone": "M2", "summary": "M2 场景全绿:FM-11 基线落地(首包 810KB/gzip 225KB、冷启 300ms、61fps)。缓存生命周期双缺陷 BUG-034/035 闭环(空快照覆写数据丢失级,双层判别力核查关单)。余:scripts 修复窗(028/033)、BUG-010 flake 治理、REGRESS+重签核→tag"}
 {"date": "2026-07-21", "version": "0.2.20", "milestone": "M2", "summary": "视觉批次一全绿闭环:M3-01 ✅(WCAG 全档 AA)+BUG-025 关单+AES-001 验收放行(无 Blocker/High,夜辉光偏淡已修)。e2e 54/54。M2 开口仅余 M2-23/24。下一步:截图送用户、FM-11、scripts 修复窗、BUG-010、REGRESS+重签核"}
 {"date": "2026-07-21", "version": "0.2.19", "milestone": "M2", "summary": "M3-04/05 双绿(星空封顶 83/95<137.6、面板 CSS 底色暗于夜面),BUG-025 回填 FIX_READY 锚定 M3-01。视觉批次一机械场景余 M3-01。下一步:M3-01+BUG-025 关单与 aes 验收并行,再 FM-11、scripts 修复窗、REGRESS+重签核"}
 {"date": "2026-07-21", "version": "0.2.18", "milestone": "M2", "summary": "M3-02/03 实测双绿:昼夜对比主判据落 [1.8,2.6] 未触界(C-2 权威几何),severity 三通道逐档验证,e2e 49/50(唯一红=BUG-010 旧 flake)。余:M3-04/05、aes 验收、FM-11、BUG-028/033/010、REGRESS+重签核"}
