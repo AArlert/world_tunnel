@@ -15,6 +15,38 @@ export const CATEGORY_COLORS: Record<Category, number> = {
   flight: 0x5cdbd3,
 }
 
+/**
+ * severity 明度/饱和三通道分层的 HSL 乘子（SPEC-3.7，乘子规则为权威契约）：
+ * sev3 = 分类 pin 色本身；sev2 = S×0.82/L×0.93；sev1 = S×0.60/L×0.82（色相不动）。
+ * spec 六类分级值为按此规则派生，故此处只存乘子、从 CATEGORY_COLORS 计算，不硬编码 hex。
+ */
+const SEVERITY_HSL_MUL: Record<1 | 2 | 3, { s: number; l: number }> = {
+  3: { s: 1.0, l: 1.0 },
+  2: { s: 0.82, l: 0.93 },
+  1: { s: 0.6, l: 0.82 },
+}
+
+const _deriveHsl = { h: 0, s: 0, l: 0 }
+const _cssColor = new THREE.Color()
+
+/**
+ * 派生 severity 分级色写入 out（HSL 变换在 sRGB 空间进行，与 spec 派生参考值一致）：
+ * 色相恒为分类色相不随 severity 变（SPEC-3.7），仅明度/饱和按乘子降。out 存 linear rgb 供 instanceColor。
+ */
+export function deriveSeverityColor(out: THREE.Color, category: Category, severity: 1 | 2 | 3): THREE.Color {
+  out.set(CATEGORY_COLORS[category]) // sev3 = 分类 pin 色本身
+  if (severity === 3) return out
+  const m = SEVERITY_HSL_MUL[severity]
+  out.getHSL(_deriveHsl, THREE.SRGBColorSpace)
+  out.setHSL(_deriveHsl.h, _deriveHsl.s * m.s, _deriveHsl.l * m.l, THREE.SRGBColorSpace)
+  return out
+}
+
+/** severity 分级色的 sRGB hex 字符串：供事件流面板行首点镜像球面标记（SPEC-2.2a，同一乘子契约）。 */
+export function severityCategoryCss(category: Category, severity: 1 | 2 | 3): string {
+  return '#' + deriveSeverityColor(_cssColor, category, severity).getHexString(THREE.SRGBColorSpace)
+}
+
 /** severity 基础尺寸（世界半径），随级别递增（SPEC-3.7）；具体数值属实现自由度。 */
 export const SEVERITY_BASE_SIZE: Record<1 | 2 | 3, number> = { 1: 0.012, 2: 0.017, 3: 0.023 }
 
@@ -219,9 +251,8 @@ class MarkerLayerImpl implements MarkerLayer {
           continue
         }
       }
-      // 脉冲环尺寸随 severity 脉冲，并乘 alpha 与 dot 一同呼吸（rings 无独立 alpha 通道，耦合缩放）
-      const size = this.ringBase(sev) * (1 + SEVERITY_PULSE_AMP[sev as 1 | 2 | 3] * pulse01) * alpha
-      this.writeRingMatrix(i, size)
+      // 环尺寸按 severity 分层（sev1 无环 / sev2 静态 / sev3 脉冲），并乘 alpha 与 dot 一同呼吸
+      this.writeRingMatrix(i, this.ringSize(sev, alpha, pulse01))
     }
     this.rings.instanceMatrix.needsUpdate = true
     if (alphaChanged) this.dotAlphaAttr.needsUpdate = true
@@ -321,7 +352,7 @@ class MarkerLayerImpl implements MarkerLayer {
       this.rings.setColorAt(i, _color)
       this.dotAlphaAttr.setX(i, this.slotAlpha[i]) // 保留呼吸过渡进度，扩容重建不打断（SPEC-3.11）
       this.writeDotMatrix(i, this.dotSize(i))
-      this.writeRingMatrix(i, this.ringBase(sev) * this.slotAlpha[i])
+      this.writeRingMatrix(i, this.ringSize(sev, this.slotAlpha[i], 0))
     }
     this.dots.count = this.count
     this.rings.count = this.count
@@ -363,8 +394,8 @@ class MarkerLayerImpl implements MarkerLayer {
     this.slotQuat[i * 4 + 1] = _quat.y
     this.slotQuat[i * 4 + 2] = _quat.z
     this.slotQuat[i * 4 + 3] = _quat.w
-    // 分类色（SPEC-3.7）
-    _color.set(CATEGORY_COLORS[e.category])
+    // severity 三通道分级色（SPEC-3.7 乘子规则；色相=分类不随 severity 变）
+    deriveSeverityColor(_color, e.category, e.severity)
     this.slotColor[i * 3] = _color.r
     this.slotColor[i * 3 + 1] = _color.g
     this.slotColor[i * 3 + 2] = _color.b
@@ -373,7 +404,7 @@ class MarkerLayerImpl implements MarkerLayer {
     this.dotAlphaAttr.setX(i, this.slotAlpha[i]) // 下发当前呼吸 alpha
 
     this.writeDotMatrix(i, this.dotSize(i)) // dot 尺寸与 alpha 无关：淡入淡出只调透明度不缩放
-    this.writeRingMatrix(i, this.ringBase(e.severity) * this.slotAlpha[i]) // pulse=0×alpha 基准，tick 每帧覆盖
+    this.writeRingMatrix(i, this.ringSize(e.severity, this.slotAlpha[i], 0)) // 基准；sev3 tick 每帧覆盖脉冲
   }
 
   /** 淡出到 0 后释放槽位：退出淡出登记、零缩放隐藏、回收槽供复用（SPEC-3.11「熄灭」终态） */
@@ -396,6 +427,16 @@ class MarkerLayerImpl implements MarkerLayer {
 
   private ringBase(sev: number): number {
     return SEVERITY_BASE_SIZE[sev as 1 | 2 | 3] * RING_SCALE
+  }
+
+  /**
+   * severity 分层的环尺寸（SPEC-3.7 发光通道）：sev1 无辉光（0）、sev2 静态柔光环（无脉冲）、
+   * sev3 持续脉冲环（pulse01 驱动，脉冲机制维持现状）。乘 alpha 与 dot 一同呼吸（SPEC-3.11）。
+   */
+  private ringSize(sev: number, alpha: number, pulse01: number): number {
+    if (sev === 1) return 0
+    if (sev === 3) return this.ringBase(sev) * (1 + SEVERITY_PULSE_AMP[3] * pulse01) * alpha
+    return this.ringBase(sev) * alpha // sev2 静态柔光环
   }
 
   private writeDotMatrix(i: number, size: number): void {

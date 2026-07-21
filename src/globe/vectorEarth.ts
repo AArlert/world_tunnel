@@ -5,12 +5,13 @@ import { vectorEarthFragmentShader, vectorEarthVertexShader } from './shaders/ve
 
 // SPEC-3.2a pin 的对外可见取值（十六进制按 sRGB 解释，THREE.Color 转线性后进 shader，
 // 末尾 colorspace_fragment 再转回 sRGB 输出）。
-const BASE_DAY = 0x0a1a2f // 底面昼端：陆地/海洋统一深色底
-const COAST_DAY = 0x4db8ff // 海岸线昼端：青蓝
-const GRID_DAY = 0x1e3a5f // 经纬网格：暗蓝
-const NIGHT_GLOW = 0x7fd4ff // 夜面海岸线辉光色
+const BASE_DAY = 0x1f4468 // 底面昼端（次日点方向）：被照亮的青蓝本体（SPEC-3.2a 显式 pin）
+const BASE_NIGHT = 0x0d1827 // 底面夜端：沉入太空的深靛（SPEC-3.2a 显式 pin，非由昼端压暗派生）
+const COAST_DAY = 0x6690b3 // 海岸线昼端：降饱和蓝灰结构线（SPEC-3.2a，与 news 蓝拉开饱和度）
+const GRID_DAY = 0x1e3a5f // 经纬网格：暗蓝（默认隐藏，仅近景/调试档启用，SPEC-3.2a）
+const NIGHT_GLOW = 0x3a5a72 // 夜面海岸线辉光色（SPEC-3.2a，低强度）
 
-const NIGHT_DIM = 0.35 // 夜端压暗系数（实现自由度，SPEC-3.2a 仅要求夜端暗于昼端）
+const NIGHT_DIM = 0.35 // 线（海岸/网格）夜端压暗系数（实现自由度，SPEC-3.2a 仅要求夜端暗于昼端保留可辨）
 const GLOW_STRENGTH = 0.4 // 夜面辉光强度（低强度，SPEC-3.2a 仅要求存在与色相）
 const TWILIGHT = 0.1 // 晨昏过渡带半宽 t ∈ [-0.1, +0.1]（SPEC-3.2①，与 M1 同源）
 
@@ -19,10 +20,18 @@ const LINE_R = 1.001 // 线浮于底面之上，避免 z-fighting（DP §2.1）
 const GRID_STEP = 30 // 经线/纬线各 30°（SPEC-3.2a）
 const GRID_SEG = 2 // 每段折线的度跨（越小越圆滑），仅几何细分、不影响间距
 
-/** 矢量昼夜材质：昼端色 dayHex，夜端按 NIGHT_DIM 压暗；glowHex 非空时夜半球附加辉光。 */
-function createSurfaceMaterial(dayHex: number, glowHex?: number): THREE.ShaderMaterial {
+/**
+ * 矢量昼夜材质：昼端色 dayHex；夜端 nightHex 显式给定则直接用（底面两端 pin，SPEC-3.2a），
+ * 否则按 NIGHT_DIM 由昼端压暗（海岸/网格线）；glowHex 非空时夜半球附加辉光。
+ */
+function createSurfaceMaterial(
+  dayHex: number,
+  opts: { nightHex?: number; glowHex?: number } = {},
+): THREE.ShaderMaterial {
   const day = new THREE.Color(dayHex)
-  const night = day.clone().multiplyScalar(NIGHT_DIM)
+  const night =
+    opts.nightHex !== undefined ? new THREE.Color(opts.nightHex) : day.clone().multiplyScalar(NIGHT_DIM)
+  const glowHex = opts.glowHex
   return new THREE.ShaderMaterial({
     uniforms: {
       uColorDay: { value: day },
@@ -88,16 +97,18 @@ export function createVectorEarth(coastline: CoastlineData): {
   dispose(): void
 } {
   const baseGeometry = new THREE.SphereGeometry(SURFACE_R, 64, 64)
-  const baseMaterial = createSurfaceMaterial(BASE_DAY)
+  const baseMaterial = createSurfaceMaterial(BASE_DAY, { nightHex: BASE_NIGHT })
   const base = new THREE.Mesh(baseGeometry, baseMaterial)
 
   const coastGeometry = polylinesToSegments(coastline.lines, LINE_R)
-  const coastMaterial = createSurfaceMaterial(COAST_DAY, NIGHT_GLOW)
+  const coastMaterial = createSurfaceMaterial(COAST_DAY, { glowHex: NIGHT_GLOW })
   const coast = new THREE.LineSegments(coastGeometry, coastMaterial)
 
+  // 经纬网格：保留构建，但默认远景不显示（SPEC-3.2a，D24）。近景 LOD/调试档的显隐规则属视觉第二批（另案）。
   const gridGeometry = polylinesToSegments(buildGraticule(), LINE_R)
   const gridMaterial = createSurfaceMaterial(GRID_DAY)
   const grid = new THREE.LineSegments(gridGeometry, gridMaterial)
+  grid.visible = false
 
   base.add(coast, grid)
 

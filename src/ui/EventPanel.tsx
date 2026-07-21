@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import type { GeoEvent } from '../data'
-import { CATEGORY_COLORS } from '../globe/markers'
+import { severityCategoryCss } from '../globe/markers'
 
 interface EventPanelProps {
   events: readonly GeoEvent[]
@@ -10,11 +10,6 @@ interface EventPanelProps {
   selectedId: string | null
   onHoverRow: (id: string | null) => void
   onSelectRow: (id: string) => void
-}
-
-/** 分类色 number → CSS hex；单一色表来自 markers.CATEGORY_COLORS（SPEC-3.7/2.2a①） */
-function categoryCss(category: GeoEvent['category']): string {
-  return '#' + CATEGORY_COLORS[category].toString(16).padStart(6, '0')
 }
 
 const MIN = 60_000
@@ -77,14 +72,19 @@ export function EventPanel({ events, hoveredId, selectedId, onHoverRow, onSelect
         <ul className="event-panel__list" onMouseLeave={() => onHoverRow(null)}>
           {sorted.map((e) => {
             const active = e.id === hoveredId || e.id === selectedId
+            // 行整体视觉轻重编码 severity：标题明度三档（SPEC-2.2a）由 event-row--sevN 承载（见 index.css）
+            const cls = `event-row event-row--sev${e.severity}${active ? ' event-row--active' : ''}`
             return (
               <li
                 key={e.id}
-                className={active ? 'event-row event-row--active' : 'event-row'}
+                className={cls}
                 onMouseEnter={() => onHoverRow(e.id)}
                 onClick={() => onSelectRow(e.id)}
               >
-                <span className="event-row__dot" style={{ background: categoryCss(e.category) }} />
+                <span
+                  className="event-row__dot"
+                  style={{ background: severityCategoryCss(e.category, e.severity) }}
+                />
                 <span className="event-row__title">{e.title}</span>
                 <span className="event-row__time">{relativeTime(e.ts, now)}</span>
               </li>

@@ -173,6 +173,22 @@ body,
   text-overflow: ellipsis;
 }
 
+/*
+ * 标题明度三档编码 severity 视觉轻重（SPEC-2.2a，D25）：sev3 最亮最突出 → sev1 最弱，
+ * 单调递增、仅用非色相通道，全档对面板底 ≥4.5:1 WCAG AA。
+ */
+.event-row--sev3 .event-row__title {
+  color: #eef2f7;
+}
+
+.event-row--sev2 .event-row__title {
+  color: #c2ccd8;
+}
+
+.event-row--sev1 .event-row__title {
+  color: #8794a3;
+}
+
 .event-row__time {
   flex: 0 0 auto;
   color: rgba(232, 232, 236, 0.4);
