@@ -5,6 +5,7 @@
 - **证据**：doc/evidence/v0.2.22/BUG-010.log(机械生成)、BUG-028-033-verification.md;orch 补跑 test-results/e2e_all.log 两轮 PASS。
 - **问题**：① 中断实例的 e2e 改动逐行审查未做(diff 251+/57-),数量大但三轮全绿+断言可跑通,残余风险留 M2 重签核 rev 审查兜底;② BUG-036(判据齐备提示无时效校验)未修,本轮签核显式重跑 REGRESS 规避;③ 未关缺陷余 8 条,均 M3+/工具债性质(011/012/013/015/016/017/029/031/032/036),无 M2 阻塞项。
 - **下一步**：显式 make regress → make evidence REGRESS=1 → rev 新实例 M2 签核卡(三硬条件核对+signoff-M2.md)→ orch 打 tag。其后 M3 立项:D22 信任层 spec 前置、BUG-017 OpenSky 仲裁、BUG-016 flight-60s 场景登记、动效批(BUG-031/D27 光柱)与视觉第二批(BUG-032/D24)。
+- **签核追记(同日)**：regress 三层全 PASS(doc/evidence/v0.2.23/regress_summary.txt,rev 独立核验时效性——晚于末次源码改动,非历史证据);rev 新实例签核**通过**(doc/evidence/signoff-M2.md):三硬条件成立、REV-011 四整改兑现、6ac20a6 的 8 spec e2e 改动逐条审查未降断言强度、10 条开放缺陷无一阻塞 M2;BUG-029 依签核复核节关单(M2-13 已承接,台账卫生滞后)。**M2 关门,tag v0.2.23**。
 
 ## [0.2.22] 2026-07-21 scripts 修复窗:BUG-028/033 双修——签核误报与视觉守卫误判消除
 - **做了什么**：① dev 卡:BUG-028(docs.py next_action 新增 FM 行零场景检查——当前里程碑存在零场景 FM 行时列出缺卡行、不提示签核;真实台账行为不变+scratch 构造 FM-11 清空态验证)、BUG-033(evidence.py scenario_needs_shot 改分句+交叉引用检测——M2-13 误判消除,全部真视觉场景 M0-02/M1-05/07/08/M2-10/15/21/M3-01~06 拦截保持,双向 CLI 实测;未采纳 bugs.md 期望文本的字面精确匹配,因会漏判 M0-02/M3-01 削弱守卫,理由入注释),两条置 FIX_READY。② orch 依 §5.3 登记 BUG-036(dev 观察上报:make next 判据②③用 any() 扫历史证据目录无时效校验,「三条判据齐备」可能假绿;修复前 orch 签核一律显式重跑 REGRESS 不采信该提示)。
