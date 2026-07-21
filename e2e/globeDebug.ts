@@ -405,6 +405,31 @@ export async function findColorInRegion(
 }
 
 /**
+ * findColorInRegion 的负载稳健版（BUG-010）：重试直到区域内命中目标色 ±tolerance 的像素数
+ * 达到 minCount（或达最大尝试次数）。8-worker 高负载下 setEvents 后的标记渲染可能滞后、
+ * 或帧内偶发读到 canvas 尚未绘制标记的陈旧帧（命中背景暗像素、某通道实测值远偏参考——
+ * 即 BUG-010 第三轮观察到的高并发像素错读）。重试是等渲染追上，不改变任何断言期望：命中
+ * 与计数下限仍由调用方按 SPEC-3.7 判定；若颜色确实错（重试耗尽仍读不到），返回最后一次
+ * 结果、调用方断言照常失败并给出信息，不会把真失败吞成通过。
+ */
+export async function findColorInRegionStable(
+  page: Page,
+  region: { x: number; y: number; width: number; height: number },
+  target: [number, number, number],
+  tolerance: number,
+  minCount: number,
+  maxAttempts = 12,
+): Promise<{ count: number; x: number; y: number } | null> {
+  let last: { count: number; x: number; y: number } | null = null
+  for (let i = 0; i < maxAttempts; i++) {
+    last = await findColorInRegion(page, region, target, tolerance)
+    if (last && last.count >= minCount) return last
+    await page.waitForTimeout(90)
+  }
+  return last
+}
+
+/**
  * M2-10 用：在 canvas 指定矩形区域内逐像素扫描，找出与给定 `background` 参照色偏差
  * （各通道差之和）超过 `threshold` 的像素，返回其包围盒（设备像素）与命中数。
  * 与 findColorInRegion 的区别——那个函数按「是否落在某个已知目标色附近」筛选，本函数
@@ -529,6 +554,106 @@ export async function sampleMarkerInstances(
     }
     return out
   })
+}
+
+export type AlphaSample = { t: number; keep: number; old: number; new: number }
+
+/**
+ * M2-21 用（BUG-010 负载稳健化）：原子地注入一批事件并在**页面内**以 requestAnimationFrame
+ * 逐帧记录三枚指定方向标记的 instanceAlpha 轨迹，最后由 waitBreathingTrace 一次性回读。
+ * 替代原「外部 page.evaluate 往返逐点采样 + waitForTimeout」——后者在 8-worker 高负载下单次
+ * 往返墙钟成本（数十~数百 ms）远大于渲染帧间隔，采样点被拉稀到 SPEC-3.11 渐隐/渐亮的中间态
+ * （0.1<α<0.9）落点不足（实测序列一度只剩 1 个中间值，如 0.90,0.76,0.00…）。页面内逐帧记录
+ * 的采样密度 = 真实渲染帧率（呼吸过渡本身即按帧累加真实毫秒推进，SPEC-7.5），是该过渡可捕获
+ * 的最高分辨率，与采样手段的往返延迟彻底解耦——改的是「采样密度/驱动方式」而非判据本身
+ * （断言仍要求 ≥2 中间值、单调、终态 0/1，全部由 SPEC-3.11 推导，强度不降）。
+ *
+ * 原子性：同一 evaluate 内先 setEvents 注入（令旧标记 target=0 起淡出、新标记从 α=0 淡入），
+ * 紧接着取 t0 启动记录器——注入与记录零间隔，首帧即捕获过渡起点（旧≈满、新≈0），不会因
+ * 「注入到开始记录之间又过若干帧」而错过早段。done 条件：旧标记熄灭(α≤0.02) 且新标记满态
+ * (α≥0.98)，或达 maxMs 安全上限。每帧重取 dots（覆盖 ensureCapacity 扩容置换实例的场景）。
+ * 只读 three.js 标准 InstancedMesh 的 instanceMatrix/instanceAlpha，标记按 lat/lon（SPEC-6.2）
+ * 方向识别、不依赖实现内部槽位次序，不读取任何过渡时长/步长实现常量。
+ */
+export async function injectAndRecordBreathing(
+  page: Page,
+  events: GeoEvent[],
+  dirs: { keep: Vec3; old: Vec3; new: Vec3 },
+  maxMs = 5000,
+): Promise<void> {
+  await page.evaluate(
+    ({ events, dirs, maxMs }) => {
+      const dbg = (
+        window as unknown as {
+          __globeDebug: {
+            globe: {
+              setEvents(e: GeoEvent[]): void
+              markerRoot: { children: { type?: string }[] }
+            }
+          }
+        }
+      ).__globeDebug
+      dbg.globe.setEvents(events)
+      const w = window as unknown as {
+        __breathTrace: { done: boolean; samples: AlphaSample[] }
+      }
+      type Dots = {
+        count: number
+        instanceMatrix: { array: ArrayLike<number> }
+        geometry: { attributes: { instanceAlpha: { array: ArrayLike<number> } } }
+      }
+      const dots = (): Dots => {
+        const group = dbg.globe.markerRoot.children.find(
+          (c) => (c as { type?: string }).type === 'Group',
+        ) as unknown as { children: Dots[] }
+        return group.children[0]
+      }
+      const alphaAt = (dir: { x: number; y: number; z: number }): number => {
+        const d = dots()
+        const mat = d.instanceMatrix.array
+        const alpha = d.geometry.attributes.instanceAlpha.array
+        let best = -Infinity
+        let bestAlpha = Number.NaN
+        for (let i = 0; i < d.count; i++) {
+          const tx = mat[i * 16 + 12]
+          const ty = mat[i * 16 + 13]
+          const tz = mat[i * 16 + 14]
+          const len = Math.hypot(tx, ty, tz)
+          if (len < 1e-6) continue
+          const dot = (tx * dir.x + ty * dir.y + tz * dir.z) / len
+          if (dot > best) {
+            best = dot
+            bestAlpha = alpha[i]
+          }
+        }
+        return bestAlpha
+      }
+      const t0 = performance.now()
+      w.__breathTrace = { done: false, samples: [] }
+      const frame = () => {
+        const t = performance.now() - t0
+        const rec = { t, keep: alphaAt(dirs.keep), old: alphaAt(dirs.old), new: alphaAt(dirs.new) }
+        w.__breathTrace.samples.push(rec)
+        if ((rec.old <= 0.02 && rec.new >= 0.98) || t >= maxMs) {
+          w.__breathTrace.done = true
+        } else {
+          requestAnimationFrame(frame)
+        }
+      }
+      requestAnimationFrame(frame)
+    },
+    { events, dirs, maxMs },
+  )
+}
+
+/** injectAndRecordBreathing 的配套回读：等页面内逐帧记录器置 done 后一次性取回全部采样。 */
+export async function waitBreathingTrace(page: Page): Promise<AlphaSample[]> {
+  await page.waitForFunction(
+    () => (window as unknown as { __breathTrace?: { done: boolean } }).__breathTrace?.done === true,
+  )
+  return page.evaluate(
+    () => (window as unknown as { __breathTrace: { samples: AlphaSample[] } }).__breathTrace.samples,
+  )
 }
 
 /**

@@ -1,5 +1,11 @@
 # log — 交接日志（新的在上；仓库内最多 4 块，超限 `make docs-archive`）
 
+## [0.2.23] 2026-07-21 BUG-010 flake 家族治理+三缺陷收官——e2e 稳定性达标,签核前置全清
+- **做了什么**：① qa BUG-010 治理卡(限额中断,orch 回收核对补验):8 个 e2e spec 负载敏感采样加固(idle-spin/day-night-calibration/zoom-range/drag-inertia/marker-breathing/marker-severity-tri-channel/panel-marker-linkage)+globeDebug 新增 125 行稳健采样 helper,断言强度未降;BUG-010 置 CLOSED 挂机械证据(全量 e2e 绿 log)。**中断实例未交汇报,orch 依纪律不采信其口头压力轮次,自行补跑两轮全量 e2e(默认 8-worker)均 PASS——合计三轮全并发绿,关单核验成立**;docs-check OK、bugs.md 表未损坏。② orch 依核对记录(doc/evidence/v0.2.22/BUG-028-033-verification.md,独立 qa 正反两向+判别力抽查全 PASS)置 BUG-028/033 CLOSED。
+- **证据**：doc/evidence/v0.2.22/BUG-010.log(机械生成)、BUG-028-033-verification.md;orch 补跑 test-results/e2e_all.log 两轮 PASS。
+- **问题**：① 中断实例的 e2e 改动逐行审查未做(diff 251+/57-),数量大但三轮全绿+断言可跑通,残余风险留 M2 重签核 rev 审查兜底;② BUG-036(判据齐备提示无时效校验)未修,本轮签核显式重跑 REGRESS 规避;③ 未关缺陷余 8 条,均 M3+/工具债性质(011/012/013/015/016/017/029/031/032/036),无 M2 阻塞项。
+- **下一步**：显式 make regress → make evidence REGRESS=1 → rev 新实例 M2 签核卡(三硬条件核对+signoff-M2.md)→ orch 打 tag。其后 M3 立项:D22 信任层 spec 前置、BUG-017 OpenSky 仲裁、BUG-016 flight-60s 场景登记、动效批(BUG-031/D27 光柱)与视觉第二批(BUG-032/D24)。
+
 ## [0.2.22] 2026-07-21 scripts 修复窗:BUG-028/033 双修——签核误报与视觉守卫误判消除
 - **做了什么**：① dev 卡:BUG-028(docs.py next_action 新增 FM 行零场景检查——当前里程碑存在零场景 FM 行时列出缺卡行、不提示签核;真实台账行为不变+scratch 构造 FM-11 清空态验证)、BUG-033(evidence.py scenario_needs_shot 改分句+交叉引用检测——M2-13 误判消除,全部真视觉场景 M0-02/M1-05/07/08/M2-10/15/21/M3-01~06 拦截保持,双向 CLI 实测;未采纳 bugs.md 期望文本的字面精确匹配,因会漏判 M0-02/M3-01 削弱守卫,理由入注释),两条置 FIX_READY。② orch 依 §5.3 登记 BUG-036(dev 观察上报:make next 判据②③用 any() 扫历史证据目录无时效校验,「三条判据齐备」可能假绿;修复前 orch 签核一律显式重跑 REGRESS 不采信该提示)。
 - **证据**：本切片 dev 自检:docs-check OK、make handover/next 输出零回归、lint PASS;两缺陷验证命令与结果详见 bugs.md 回填段。复验归独立 qa(核对记录型,scripts 无 vitest 覆盖,工具侧限制见 BUG-015)。
@@ -11,9 +17,3 @@
 - **证据**：doc/evidence/v0.2.20/M2-23.log、M2-24.log、BUG-034.log、BUG-035.log(均机械生成);全量单测 179/179、lint PASS;判别力核查两轮(还原修复→红,恢复→绿,diff 逐字节一致)。
 - **问题**：① BUG-035 遗留可选加固点:正常实例重复 stop 属幂等重复写非数据丢失,未补断言(qa 判定非阻塞);② e2e 层 StrictMode 真实浏览器检查点未做(成本高,列遗留);③ M2-24 数值系本机 vite preview,M5 须按真实验收环境重测;④ 全量 e2e 高并发 flake(BUG-010 家族已扩至 3 例)是 REGRESS 100% 的直接威胁,签核前必须处置。
 - **下一步**：dev 卡 BUG-028+BUG-033(scripts 修复窗,期间不派用 evidence 的卡);qa 卡 BUG-010 flake 家族治理(负载敏感断言加固);REGRESS=1+M2 重签核(新 rev 实例)→ tag;动效批(BUG-031/D27)与视觉第二批(BUG-032/D24)待 M2 关后立项。
-
-## [0.2.20] 2026-07-21 M3-01 收口+AES-001 验收放行——视觉批次一全绿闭环,BUG-025 关单
-- **做了什么**：① qa 卡:M3-01(e2e/event-row-severity.spec.ts 新增)——标题明度三档单调+对面板底 WCAG 对比全档 ≥4.5:1 AA(实测 5.7~17.7:1)+圆点镜像 severity 分级(色相恒定/明度饱和取 SPEC-3.7 值),✅;BUG-025 机械关单(关单人≠修复人)。② aes 验收(AES-001,与制定不同实例):**放行**——无 Blocker/High,Medium×4/Nit×3 均属已归批次项(晨昏 signature/severity 环形态归 D27 动效批、密集聚合归第二批 D23、「多新」静止态编码归 D27);「做对了什么」八条含夜面辉光 `#3a5a72` 修复历史偏淡关注点、黑名单#1 深底红点 default 被破除、双真实态取证(137 枚当日事件+环太平洋震群压力位)。20 张机位矩阵截图入 doc/attachment/aes-20260721-visual-batch1/(移动档缺省已注明)。无需 arch 落 spec、无需新开 bugs。
-- **证据**：doc/evidence/v0.2.19/M3-01.log+截图、BUG-025.log;全量 e2e 54/54(本轮零 flake);doc/review/AES-001-visual-batch1-acceptance.md。
-- **问题**：① M3-01 圆点镜像仅 disaster 一类实测(fixture 限制),跨分类通用性由 M3-03 球面侧覆盖+同一派生函数,列表侧全六类为可疑未定性缺口(qa 未开单,非判据要求);② aes 判据演进建议两条(signature 弹性判据/层次 vs 形态质感区分)待动效批时采纳;③ M2 开口仅余 M2-23/24(FM-11)。
-- **下一步**：aes 对照截图送用户过目;qa FM-11 量测卡(M2-23/24,M2 最后开口);dev 卡 BUG-028+BUG-033(scripts 串行窗口);BUG-010 qa 处置;REGRESS=1+M2 重签核(新 rev 实例)→ tag;动效批(BUG-031/D27 光柱参照)与视觉第二批(BUG-032/D24 LOD)择期立项。

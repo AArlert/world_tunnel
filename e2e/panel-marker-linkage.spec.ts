@@ -111,9 +111,16 @@ test('list→marker：面板选中列表行使对应标记高亮态放大（SPEC
 
   // 基线：未联动前的标记 dot 像素面积（分类实色，容差窄，天然与 AdditiveBlending 的脉冲光环
   // 区分——RingGeometry(0.6,1) 中空半径始终大于未高亮 dot 半径，见本文件设计说明，
-  // 不会被光环像素混入计数）
-  const baselineSamples = [await measureDotPixelCount(), await measureDotPixelCount()]
-  const baselineMax = Math.max(...baselineSamples)
+  // 不会被光环像素混入计数）。
+  // 标记经真实 dataLayer 链路（GDACS mock→store→GlobeScene.setEvents→渲染）**异步**上屏，
+  // waitForSurfaceReady 只保底面材质就绪、不保标记已渲染；8-worker 高负载下该链路可能滞后于
+  // 像素采样、令基线读到 0（BUG-010 负载稳健化）。此处轮询到 dot 像素可见为止（等渲染追上），
+  // 不改判据——仍要求联动前后像素面积的因果关系（SPEC-7.4）；真渲染不出则轮询耗尽照常失败。
+  let baselineMax = 0
+  for (let i = 0; i < 25 && baselineMax === 0; i++) {
+    baselineMax = Math.max(await measureDotPixelCount(), await measureDotPixelCount())
+    if (baselineMax === 0) await page.waitForTimeout(100)
+  }
   expect(baselineMax).toBeGreaterThan(0) // 前置自检：确实在采样窗口内找到了该标记
 
   const row = page.locator('.event-row')

@@ -2,11 +2,12 @@ import { expect, test } from '@playwright/test'
 import type { GeoEvent } from '../src/data'
 import {
   canvasBufferSize,
-  findColorInRegion,
+  findColorInRegionStable,
   sampleCamera,
   sampleMarkerRings,
   samplePixelBoxStable,
   setDebugEvents,
+  setEarthRotationY,
   waitForGlobeDebug,
   waitForSurfaceReady,
   waitNextFrame,
@@ -171,6 +172,15 @@ test('分级色对 SPEC-3.7 参考表逐通道 ±ε、色相跨 severity 恒定 
   for (const cat of COLOR_CATS) {
     const hsl: Record<number, { h: number; s: number; l: number }> = {}
     for (const sev of [3, 2, 1] as const) {
+      // 负载稳健（BUG-010）：本用例 3 分类 × 3 severity = 9 枚采样在 8-worker 高负载下累计
+      // 耗时（每枚含 samplePixelBoxStable 轮询）可能越过 SPEC-7.3 的 10s 空闲阈值，一旦触发
+      // 空闲自转，markerRoot 逐帧旋转会把标记转离 projectLatLon 依赖的零自转落点，令
+      // findColorInRegion/samplePixelBoxStable 读到背景暗像素（即第三轮观察到的通道值 12 对
+      // 参考 179 的高并发像素错读）。每枚采样前用不产生位移的点击重置空闲计时（SPEC-7.3
+      // markInput）并重钉零自转，保住「默认视角 + 零自转」的投影前提（SPEC-3.1）；不改任何
+      // 断言期望值（仍对 SPEC-3.7 参考表逐通道 ±ε）。发光测试（第二个 it）早已同法处理。
+      await resetIdleTimer(page)
+      await setEarthRotationY(page, 0)
       const { x, y } = projectLatLon(ROW_LAT[cat], COL_LON[sev], width, height)
       const region = {
         x: Math.max(0, Math.round(x - HALF)),
@@ -179,8 +189,9 @@ test('分级色对 SPEC-3.7 参考表逐通道 ±ε、色相跨 severity 恒定 
         height: Math.min(height, HALF * 2),
       }
       const target = hexToRgb(SEVERITY_HEX[cat][sev])
-      // 路径 (b)：渲染标记像素对参考 hex 逐通道 ±ε（findColorInRegion 各通道独立比对 ≤ε）
-      const hit = await findColorInRegion(page, region, target, EPS)
+      // 路径 (b)：渲染标记像素对参考 hex 逐通道 ±ε（各通道独立比对 ≤ε）。用 findColorInRegionStable
+      // 重试等渲染追上（BUG-010）：命中/计数下限仍按 SPEC-3.7 判定，真读不到则重试耗尽照常失败。
+      const hit = await findColorInRegionStable(page, region, target, EPS, MIN_MATCH_PIXELS)
       expect(
         hit,
         `${cat} sev${sev}：标记位置附近未找到匹配 SPEC-3.7 参考 #${SEVERITY_HEX[cat][sev]

@@ -46,12 +46,23 @@ test.describe('M1-05 昼夜混合晨昏线与格林尼治校准', () => {
   test('晨昏线在 t∈[-0.1,+0.1] 内呈现渐变过渡、band 外趋于饱和（SPEC-3.2）', async ({ page }) => {
     // 本用例含数十次"设 sunDir→等两帧→回读像素"往返（候选经度扫描 + band 内细采样），
     // 全量回归下多 e2e worker 并发占满 GPU 时单次往返明显变慢，默认 30s 测试超时
-    // 余量不足，参照 e2e/starfield.spec.ts 已有的 test.setTimeout 用法放宽
-    test.setTimeout(90_000)
+    // 余量不足，参照 e2e/starfield.spec.ts 已有的 test.setTimeout 用法放宽。
+    // BUG-010：8-worker 高负载下 samplePixelBoxStable 轮询可能多次达上限，29 枚采样累计逼近
+    // 90s，再放宽到 120s 给足预算——断言（晨昏带形状/饱和/单调，SPEC-3.2）皆用稳定采样、与
+    // 墙钟无关，仅完成时间需要余量。
+    test.setTimeout(120_000)
     await page.bringToFront()
     await page.goto('/?style=satellite')
     await waitForGlobeDebug(page)
     await waitForRealEarthTexture(page)
+
+    // BUG-010：卫星 JPEG 纹理加载在 8-worker 负载下可能超过 SPEC-7.3 的 10s 空闲阈值，令空闲
+    // 自转提前触发、漂移 earthRotY，污染下面的零自转前置自检（空闲自转与本场景 SPEC-3.2 正交）。
+    // 用不产生位移的点击重置空闲计时（markInput 离 AUTO_SPIN 并重启倒计时）+ 重钉零自转，恢复
+    // SPEC-3.1 零初始自转前提（400/300 为 CSS 像素，与下方 luminanceAt 用的 CLICK_X/Y 同点、
+    // 远离 side-panel）；相机 (0,0,3.2) 默认视角判据不受影响、照常校验。
+    await page.mouse.click(400, 300)
+    await setEarthRotationY(page, 0)
 
     // 前置自检（非 SPEC 判据）：确认相机仍是 SPEC-3.1 默认视角 (0,0,3.2)，
     // 否则"旋转地球本体、画布中心 = 当前转到中心的经度"这一采样点假设不成立
@@ -195,10 +206,21 @@ test.describe('M1-05 昼夜混合晨昏线与格林尼治校准', () => {
   test('格林尼治 (lat0,lon0) 校准标记落在画布几何中心，截图供人工判读几内亚湾位置（SPEC-3.6）', async ({
     page,
   }) => {
+    // 超时预算（BUG-010）：waitForRealEarthTexture 要等真实卫星 JPEG 加载/解码，8-worker 高负载
+    // 下网络与解码争抢加两张截图，默认 30s 偶发不足；断言（中心像素纯白 + 截图）与墙钟无关。
+    test.setTimeout(60_000)
     await page.bringToFront()
     await page.goto('/?style=satellite')
     await waitForGlobeDebug(page)
     await waitForRealEarthTexture(page)
+
+    // BUG-010：卫星 JPEG 纹理加载在 8-worker 负载下可能超过 SPEC-7.3 的 10s 空闲阈值，令空闲
+    // 自转提前触发、漂移 earthRotY，污染下面的零自转前置自检（实测曾 received=0.0159）。用不
+    // 产生位移的点击重置空闲计时 + 重钉零自转恢复 SPEC-3.1 前提（点击落在中心、此刻尚无标记，
+    // 无副作用；重置后 setSunDir/addCalibrationMarker/采样均在新一轮 10s 倒计时内，且采样前
+    // 另有一次 setEarthRotationY(0) 兜底）；相机 (0,0,3.2) 默认视角判据不受影响、照常校验。
+    await page.mouse.click(400, 300)
+    await setEarthRotationY(page, 0)
 
     const cam = await sampleCamera(page)
     expect(cam.x).toBeCloseTo(0, 3)

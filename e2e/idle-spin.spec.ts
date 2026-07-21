@@ -39,10 +39,18 @@ test.describe('空闲自转与输入打断（SPEC-7.3）', () => {
     await waitForGlobeDebug(page)
     expect(await page.evaluate(() => document.visibilityState)).toBe('visible')
 
+    // 空闲计时基准归零（BUG-010 负载稳健化）：goto→waitForGlobeDebug 的真实耗时在 8-worker
+    // 负载下不确定（可达数秒），若直接依赖「后续 6s 墙钟 < 10s 空闲阈值」的隐式余量，setup 慢
+    // 时该余量被侵蚀、空闲自转可能在 6s 采样前就已触发，令「空闲期不自转」断言偶发红。此处用
+    // 一次不产生位移的点击（黑盒输入，触发 SPEC-7.3 markInput 把空闲计时重置到 0），使后续
+    // 6s/12s 采样窗口相对该重置点计时、margins 与 setup 负载解耦。点击不含拖拽增量、不改相机
+    // 方位（day-night-calibration.spec.ts 同法）；cam0 在点击后采样，作后续「相机不动」的基线。
+    await page.mouse.click(CX, CY)
+
     const cam0 = await sampleCamera(page)
     const star0 = await sampleStarfieldPose(page)
 
-    // 10s 空闲阈值内（留安全余量，在 6s 处取样）：地球本体不自转，相机不动（SPEC-7.3）
+    // 10s 空闲阈值内（相对上面重置点在 ~6s 处取样，留 4s 安全余量）：地球本体不自转、相机不动（SPEC-7.3）
     await page.waitForTimeout(6000)
     const camIdle = await sampleCamera(page)
     const starIdle = await sampleStarfieldPose(page)
@@ -158,23 +166,36 @@ test.describe('空闲自转与输入打断（SPEC-7.3）', () => {
 
     // 越过 10s 空闲阈值进入自转状态后再起测——避免把"刚进入自转"的瞬间计入测速窗口
     await page.waitForTimeout(11000)
-    const s0 = await sampleSpinClock(page)
 
-    // 测速窗口取 5s 真实墙钟时间：窗口越长，等待/IPC 调度抖动占整体时长的比例越小，
-    // 测得速率越接近真实值
-    await page.waitForTimeout(5000)
-    const s1 = await sampleSpinClock(page)
+    // 负载稳健的速率量测（BUG-010）：SPEC-7.3 的自转按真实帧间隔时间归一化推进
+    // （spinDeltaRad = 每帧常量 × dt/帧基准），正常帧率下单位时间自转角速度恒为 ≈1.2°/s
+    // （SPEC-7.5 时间基准不变量）。但 8-worker 高负载下偶发 >100ms 的渲染卡顿帧被实现的 dt
+    // 上限钳位（切后台/断点恢复保护，实现细节），卡顿帧的自转增量少于按真实墙钟应得量——单一
+    // 5s 平均窗口若恰好含若干卡顿帧，测得速率被拖低、偶发跌破 −20% 下界。改为连续多段短窗
+    // 各测一次速率、取**中位数**：卡顿只污染少数窗口，中位数反映正常帧率下的时间基准速率，
+    // 正是 SPEC-7.5 约束的「实际帧率不同时单位时间自转角速度一致」——不放宽 ±20% 容差，只把
+    // 估计量从「含卡顿的单窗均值」换成「抗离群的多窗中位数」（采样方式改，判据强度不降）。
+    const WINDOW_MS = 700
+    const WINDOWS = 9
+    const marks: { earthRotY: number; tMs: number }[] = [await sampleSpinClock(page)]
+    for (let i = 0; i < WINDOWS; i++) {
+      await page.waitForTimeout(WINDOW_MS)
+      marks.push(await sampleSpinClock(page))
+    }
+    const rates: number[] = []
+    for (let i = 1; i < marks.length; i++) {
+      const deltaDeg = ((marks[i].earthRotY - marks[i - 1].earthRotY) * 180) / Math.PI
+      const deltaSec = (marks[i].tMs - marks[i - 1].tMs) / 1000
+      rates.push(Math.abs(deltaDeg / deltaSec)) // 方向不在 SPEC-7.3 约束范围内，只测速率大小
+    }
+    rates.sort((a, b) => a - b)
+    const medianRate = rates[Math.floor(rates.length / 2)]
 
-    const deltaDeg = ((s1.earthRotY - s0.earthRotY) * 180) / Math.PI
-    const deltaSec = (s1.tMs - s0.tMs) / 1000
-    const degPerSec = Math.abs(deltaDeg / deltaSec) // 方向不在 SPEC-7.3 约束范围内，只测速率大小
-
-    // 容差 ±20%（即 [0.96, 1.44] °/s）依据：① SPEC-7.3 原文用「≈」表述该常量，本身
-    // 允许一定近似；② 本文件全程用 page.waitForTimeout 等真实墙钟时间采样，叠加两次
-    // page.evaluate 往返与 Playwright 调度的毫秒级抖动。±20% 足以吸收上述噪声，同时仍能
-    // 拦截数量级错误（例如把"每帧固定增量"误当成用真实帧数而非真实时间折算，导致在
-    // 实际帧率偏离 60fps 的运行环境下速率成倍偏差——这正是 SPEC-7.5 要求验证的不变量）。
-    expect(degPerSec).toBeGreaterThan(1.2 * 0.8)
-    expect(degPerSec).toBeLessThan(1.2 * 1.2)
+    // 容差 ±20%（即 [0.96, 1.44] °/s）依据：① SPEC-7.3 原文用「≈」表述该常量，本身允许一定
+    // 近似；② 全程用真实墙钟时间采样，叠加 page.evaluate 往返与 Playwright 调度的毫秒级抖动。
+    // ±20% 足以吸收上述噪声，同时仍能拦截数量级错误（例如把"每帧固定增量"误当成用真实帧数
+    // 而非真实时间折算，导致在实际帧率偏离 60fps 时速率成倍偏差——正是 SPEC-7.5 要验证的不变量）。
+    expect(medianRate).toBeGreaterThan(1.2 * 0.8)
+    expect(medianRate).toBeLessThan(1.2 * 1.2)
   })
 })
