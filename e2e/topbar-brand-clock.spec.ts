@@ -61,3 +61,13 @@ test('UTC 时钟实时刷新——间隔 >1s 两次采样取值不同（SPEC-2.1
   expect(t2).toMatch(/^\d{2}:\d{2}:\d{2} UTC$/)
   expect(t2).not.toBe(t1) // 两次取值不同，证明随真实时间推进而非静态占位文本
 })
+
+// BUG-026 复验：加密行情 ticker 属 M3（SPEC-2.1「加密行情 ticker（M3，SPEC-5.7）」），
+// 顶栏当前不应渲染该占位文本——期望值即「不含」，非对占位符禁用态展示的容忍。
+test('顶栏不含行情 ticker 占位文本（SPEC-2.1，BUG-026）', async ({ page }) => {
+  await page.goto('/')
+  const topbar = page.locator('.topbar')
+  await expect(topbar).toBeVisible()
+  const text = (await topbar.innerText()).trim()
+  expect(text).not.toContain('行情')
+})
