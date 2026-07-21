@@ -488,6 +488,67 @@ export async function sampleMarkerCount(page: Page): Promise<number> {
 }
 
 /**
+ * M2-21 用：黑盒读取标记层每个渲染实例的当前透明度（instanceAlpha，dots 自定义 shader
+ * 的 per-instance alpha 通道 `gl_FragColor = vec4(vColor, vAlpha)`，即直接决定该标记被
+ * 渲染出的可见透明度）与其模型空间平移向量（instanceMatrix 第 12/13/14 元素 = 标记落点
+ * 位置，由事件 lat/lon 经 SPEC-6.2 换算得到）。用途：按 lat/lon（SPEC-6.2 换算得的方向）
+ * 识别特定标记实例，逐帧采样其 alpha，验证 SPEC-3.11 呼吸式过渡「旧标记渐隐 / 新标记
+ * 渐亮 / 既有标记连续可见」的可见状态随时间连续变化。只读 three.js 标准 InstancedMesh
+ * 的公开属性（instanceMatrix / geometry attribute），定位方式与 sampleMarkerCount 同一
+ * 手法（markerRoot 下唯一 Group 的首个子节点 = dots InstancedMesh），不触碰 MarkerLayer
+ * 私有字段、不读取任何实现常量（过渡时长/步长等均不作断言期望值）。
+ */
+export async function sampleMarkerInstances(
+  page: Page,
+): Promise<{ alpha: number; tx: number; ty: number; tz: number }[]> {
+  return page.evaluate(() => {
+    const dbg = (window as unknown as { __globeDebug: DebugHook }).__globeDebug
+    const markerGroup = dbg.globe.markerRoot.children.find(
+      (c) => (c as unknown as { type?: string }).type === 'Group',
+    ) as unknown as
+      | {
+          children: {
+            count: number
+            instanceMatrix: { array: ArrayLike<number> }
+            geometry: { attributes: { instanceAlpha: { array: ArrayLike<number> } } }
+          }[]
+        }
+      | undefined
+    if (!markerGroup) throw new Error('标记层根节点（Group）未在 markerRoot.children 中找到')
+    const dots = markerGroup.children[0]
+    const mat = dots.instanceMatrix.array
+    const alpha = dots.geometry.attributes.instanceAlpha.array
+    const out: { alpha: number; tx: number; ty: number; tz: number }[] = []
+    for (let i = 0; i < dots.count; i++) {
+      out.push({
+        alpha: alpha[i],
+        tx: mat[i * 16 + 12],
+        ty: mat[i * 16 + 13],
+        tz: mat[i * 16 + 14],
+      })
+    }
+    return out
+  })
+}
+
+/**
+ * M2-21 用：黑盒读取标记层根 Group 的直接子节点数。SPEC-3.8「标记用 instancing/点精灵，
+ * 不逐事件建 Mesh」——markers.ts 以 dots + rings 两层 InstancedMesh 承载全部标记，子节点
+ * 数恒为 2、不随事件数增长。用于验证增删（呼吸过渡）过程中仍保持 instancing、不整表
+ * 重建为逐事件 Mesh。只读公开 Object3D 结构，不触碰私有字段。
+ */
+export async function markerGroupChildCount(page: Page): Promise<number> {
+  return page.evaluate(() => {
+    const dbg = (window as unknown as { __globeDebug: DebugHook }).__globeDebug
+    const g = dbg.globe.markerRoot.children.find(
+      (c) => (c as unknown as { type?: string }).type === 'Group',
+    ) as unknown as { children: unknown[] } | undefined
+    if (!g) throw new Error('标记层根节点（Group）未在 markerRoot.children 中找到')
+    return g.children.length
+  })
+}
+
+/**
  * BUG-022 复验用：在 canvas 指定矩形区域内统计"近白/饱和"像素——三通道同时 ≥ minChannel
  * 的像素（即 min(R,G,B) ≥ minChannel）。纯白 (255,255,255) 与近白不属 SPEC-3.7 六分类色
  * 表中任何分类色（该表六色的 min 通道均 ≤ 127），也不属两分类色普通透明混合的结果（红缺
