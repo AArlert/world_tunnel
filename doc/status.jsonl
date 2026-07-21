@@ -1,3 +1,4 @@
+{"date": "2026-07-21", "version": "0.2.13", "milestone": "M2", "summary": "REV-013 落地:视觉批次一入 spec 并 pin(色值体系/昼夜对比契约/severity 三通道分层/SPEC-2.2a 填值),M2-15 回退重测,新增 M3-02~06。在途:dev FM-09。下一步:视觉实现、qa 重测、aes 验收、FM-11、重签核"}
 {"date": "2026-07-21", "version": "0.2.12", "milestone": "M2", "summary": "BUG-026/027 机械关单+BUG-014 流程口径关单(核对记录),登记 BUG-029(SPEC-2.2 canvas 无人认领)。UX 七单关五。下一步:REV-013 条文应用 v0.2.13、dev FM-09、视觉实现、重签核"}
 {"date": "2026-07-21", "version": "0.2.11", "milestone": "M2", "summary": "FM-10 落地:顶栏 Worlens+UTC 时钟+六分类过滤,M2-18/19 ✅、M0-02 复登,e2e 43/43。BUG-026/027 FIX_READY。REV-013 视觉仲裁 11 准 1 驳待应用。余:FM-09、视觉实现、FM-11、BUG-010/028、重签核"}
 {"date": "2026-07-21", "version": "0.2.10", "milestone": "M2", "summary": "USGS M2.5+ 门槛与排序邻近度落地,M2-05/22 ✅(166 单测零红),新 fixture 真实抓取。BUG-023/024 FIX_READY 待独立复验关单。余:FM-10/09 实现、BUG-010、arch 视觉提案在途、重签核"}

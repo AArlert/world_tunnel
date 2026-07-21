@@ -1,5 +1,11 @@
 # log — 交接日志（新的在上；仓库内最多 4 块，超限 `make docs-archive`）
 
+## [0.2.13] 2026-07-21 REV-013 视觉批次一条文落地——色值体系/昼夜对比契约/severity 分层入 spec
+- **做了什么**：orch 依 REV-013 应用 11 项裁准条文并 pin(v0.2.13 修改记录):SPEC-3.2a 前言自洽修订+底面两端 pin `#1f4468`/`#0d1827`+海岸线降饱 `#6690b3`(解 news 撞色)+经纬网默认隐藏+夜面辉光 `#3a5a72`+新增昼夜对比契约([1.8,2.6] 主判据/≥1.3:1 副判据);SPEC-3.2① 补昼半球连续衰减(C-3:与对比契约绑定,rev 复算平涂 luma 比 2.76 超上限故不可分拆);SPEC-3.7 补 severity 明度/饱和/发光三通道分层(乘子规则权威、六类 hex 派生参考);SPEC-2.2a 填 D25 留白(标题明度三档+行首点镜像);SPEC-3.5/2.2 各加最小相对亮度契约(rev 改文)。改动 8(脉冲随新鲜度)驳回另开动效批。testplan 同步:M2-15 回退 🔲 重测(新色值),M2-13 判据澄清(只断不变量 A),M3-01 补全转可测,新增 M3-02(昼夜对比,C-2 量测方法定死)/M3-03(标记分层)/M3-04(星空)/M3-05(面板)/M3-06(近景网格占位,C-1);FM-07 场景列挂 M3-02~06。
+- **证据**：本切片纯 spec/台账应用;裁决依据 doc/review/REV-013-visual-batch1-arbitration.md 逐字应用(11 准 1 驳,C-1/C-2/C-3 硬条件均落地)。
+- **问题**：① M2-15 回退后 M2 硬门槛待测 = M2-13/15/20/21/23/24 六条;② dev 视觉批次一实现未派(等 FM-09 dev 交付避免 markers.ts 并发);③ M3-02~05 即刻可测但归 D24/D25 批次,勿挂 M2 门槛;④ 动效批(脉冲新鲜度+reduced-motion)择期另立。
+- **下一步**：FM-09 dev 交付后 → qa 测 M2-20/21(连带 M2-13 重测+BUG-029 承接);dev 视觉批次一实现(shader 色值/衰减/标记分层/面板)→ qa 测 M2-15+M3-02~05 → aes 新实例 /aes-review 验收;FM-11 量测卡;BUG-010/028;REGRESS=1+重签核 M2。
+
 ## [0.2.12] 2026-07-21 缺陷线收口:BUG-026/027 机械关单,BUG-014 流程口径关单,登记 BUG-029
 - **做了什么**：① qa 复验关单 BUG-026/027(独立实例):核对 v0.2.11 修复落地,e2e/topbar-brand-clock.spec.ts 补「顶栏不含行情占位文本」最小断言(引 SPEC-2.1+BUG-026),make evidence 机械关单;② qa 独立核对 BUG-014(流程类,§5.3-4 口径):SPEC-2.1 UTC 时钟三方互指(FM-10↔M2-18↔证据)闭环成立,顺带核对 SPEC-2.x 全部子句认领面,核对记录入证据库,orch 依记录置 CLOSED;③ 核对发现同构新遗留登记 BUG-029:SPEC-2.2「全屏地球 canvas」子句无场景显式认领(M0-02 只断言非零),期望 M2-13 重测卡承接。
 - **证据**：doc/evidence/v0.2.11/BUG-026.log、BUG-027.log(机械生成)、BUG-014-verification.md(独立核对记录)。
@@ -11,9 +17,3 @@
 - **证据**：doc/evidence/v0.2.10/M2-18.log、M2-19.log、M0-02.log+M0-02-smoke.png(均机械生成)。
 - **问题**：① M2-19 的 conflict/news/launch/flight 四类仅 DOM 级验证(M2 无该四类信源),事件级过滤用例待 M3 有源后补;② 标记侧判据用分类色像素搜索而非 InstancedMesh.count(高水位不回退,方法选择已注释);③ REV-013 视觉仲裁已回(11 准 1 驳,三硬条件:5/6 绑定、亮度定义 pin、近景网格占位),应用为下一切片。
 - **下一步**：qa 复验关单 BUG-026/027 + BUG-014 核对记录(流程类口径);orch 应用 REV-013 条文+pin+testplan 同步(v0.2.12);dev FM-09(缓存启动+呼吸过渡)→ qa 测 M2-20/21;dev 视觉批次一实现 → aes 新实例验收;FM-11 量测;BUG-010/028;REGRESS=1+重签核。
-
-## [0.2.10] 2026-07-21 USGS 噪声门槛+排序邻近度落地——M2-05/22 ✅
-- **做了什么**：① dev(前一卡)实现随本切片入库:src/data/providers/usgs.ts 端点切换 2.5_day/2.5_hour(SPEC-5.1,源侧兑现 M≥2.5 门槛,无客户端过滤)、src/ui/EventPanel.tsx 排序比较器改三级键(ts 与 now 绝对时间差升序/等距未来优先/id 升序,SPEC-2.2a);② qa 独立实例:tests/usgs.test.ts 按新判据重写(端点+2.5 样本映射+severity 含 [2.5,4.5) 内点)、新建 tests/event-panel-sort.test.ts(react-dom/server 真实渲染面板读回行序,判据五点:混合/全未来/全过去/tie-break/空态)、新 fixture usgs_2.5_day.json(真实 curl 抓取 2026-07-21T03:20:15Z,52 features,fixtures/README 登记);M2-05/M2-22 双 ✅(make evidence 机械回填);全量 166 单测零红。
-- **证据**：doc/evidence/v0.2.8/M2-05.log、M2-22.log(目录名为生成时版本位,属机械行为)。
-- **问题**：① BUG-023/024 仍 FIX_READY——待独立 qa 以证据机械关单(下一卡);② 旧 fixture usgs_all_hour/all_day.json 已无测试引用,保留不删(历史样本);③ severity 3 档无真实样本(当日无 M≥6 地震),由构造输入覆盖,属判据设计而非漏测。
-- **下一步**：qa 复验关单 BUG-023/024;dev FM-10 顶栏+过滤(串行,避免与复验并跑写树);dev FM-09;BUG-010 处置;arch 视觉提案→rev;全绿 REGRESS=1+重签核 M2。
