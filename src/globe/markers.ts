@@ -117,7 +117,10 @@ class MarkerLayerImpl implements MarkerLayer {
       transparent: true,
       opacity: 0.55,
       depthWrite: false,
-      blending: THREE.AdditiveBlending, // 辉光叠加
+      // 普通透明混合（BUG-022）：加色混合下密集区多环叠加会各通道累加饱和成白，
+      // 白不属 SPEC-3.7 分类色表，破坏「分类色为唯一色语义」。普通混合的叠加结果
+      // 收敛于该分类色本身、绝不越过其色域趋白；近黑球面背景下单环观感与加色几乎等同。
+      blending: THREE.NormalBlending,
       side: THREE.DoubleSide,
     })
     this.buildMeshes(INITIAL_CAPACITY)
