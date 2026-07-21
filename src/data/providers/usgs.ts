@@ -1,5 +1,6 @@
 // USGS 地震信源：归一化 + 条件请求轮询（SPEC-5.1）。
-// 启动首轮拉 all_day 回填（覆盖过去 24h，天然含 all_hour 子集），此后常规轮询走 all_hour。
+// 采用 M2.5+ 显著性 feed，源侧滤除 M<2.5 仪器级微震（兑现 SPEC-5.0a 呈现门槛 = M≥2.5）。
+// 启动首轮拉 2.5_day 回填（覆盖过去 24h 的 M≥2.5，天然含 2.5_hour 子集），此后常规轮询走 2.5_hour。
 
 import { conditionalFetch } from '../http'
 import type { EventProvider, GeoEvent, PollContext, ProviderResult } from '../types'
@@ -7,8 +8,8 @@ import type { EventProvider, GeoEvent, PollContext, ProviderResult } from '../ty
 /** 轮询间隔 60s（SPEC-5.1） */
 export const USGS_INTERVAL_MS = 60 * 1000
 
-const ALL_HOUR_URL = 'https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_hour.geojson'
-const ALL_DAY_URL = 'https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_day.geojson'
+const M25_HOUR_URL = 'https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/2.5_hour.geojson'
+const M25_DAY_URL = 'https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/2.5_day.geojson'
 
 /** severity 三档：mag<4.5→1，4.5≤mag<6→2，mag≥6→3（SPEC-5.1） */
 function severityFromMag(mag: number): 1 | 2 | 3 {
@@ -88,12 +89,12 @@ export function normalizeUsgs(raw: unknown, now: number): GeoEvent[] {
   return events
 }
 
-/** USGS provider：首轮拉 all_day 回填，常规轮询走 all_hour（SPEC-5.1） */
+/** USGS provider：首轮拉 2.5_day 回填，常规轮询走 2.5_hour（SPEC-5.1） */
 export const usgsProvider: EventProvider = {
   source: 'usgs',
   intervalMs: USGS_INTERVAL_MS,
   async poll(ctx: PollContext): Promise<ProviderResult> {
-    const url = ctx.firstRun ? ALL_DAY_URL : ALL_HOUR_URL
+    const url = ctx.firstRun ? M25_DAY_URL : M25_HOUR_URL
     const result = await conditionalFetch(url, ctx.signal)
     if (result.status === 'notModified') return { status: 'notModified' }
     return { status: 'ok', events: normalizeUsgs(result.body, ctx.now) }

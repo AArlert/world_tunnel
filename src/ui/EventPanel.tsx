@@ -37,12 +37,21 @@ function relativeTime(ts: number, now: number): string {
 
 /**
  * 事件流面板（SPEC-2.2 右侧 300px 可折叠、球主列表从）：列表行 = 分类色圆点 + 标题 + 相对时间，
- * ts 倒序，空态「暂无事件」（SPEC-2.2a）。消费外部传入的可见集，不内建分类过滤（属 FM-10）。
+ * 按距 now 时间邻近度升序，空态「暂无事件」（SPEC-2.2a）。消费外部传入的可见集，不内建分类过滤（属 FM-10）。
  */
 export function EventPanel({ events, hoveredId, selectedId, onHoverRow, onSelectRow }: EventPanelProps) {
   const [collapsed, setCollapsed] = useState(false)
-  const now = Date.now()
-  const sorted = [...events].sort((a, b) => b.ts - a.ts) // 最新在上（SPEC-2.2a）
+  const now = Date.now() // 与相对时间显示同源（SPEC-2.2a）
+  // 距 now 时间邻近度升序：主键 |ts-now| 小者在前；等距时未来（ts>now）先于过去；仍并列按 id 升序（SPEC-2.2a）
+  const sorted = [...events].sort((a, b) => {
+    const da = Math.abs(a.ts - now)
+    const db = Math.abs(b.ts - now)
+    if (da !== db) return da - db
+    const aFuture = a.ts > now
+    const bFuture = b.ts > now
+    if (aFuture !== bFuture) return aFuture ? -1 : 1
+    return a.id < b.id ? -1 : a.id > b.id ? 1 : 0
+  })
 
   if (collapsed) {
     return (
