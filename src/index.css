@@ -35,8 +35,49 @@ body,
   letter-spacing: 0.04em;
 }
 
-.topbar .placeholder {
-  color: rgba(232, 232, 236, 0.4);
+/* UTC 时钟靠右（SPEC-2.1）；等宽数字避免逐秒跳动位移 */
+.topbar__clock {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.03em;
+  color: rgba(232, 232, 236, 0.7);
+}
+
+/* 六分类过滤开关（首屏可见控件，SPEC-2.4①） */
+.category-filter {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.category-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 8px;
+  background: none;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  color: rgba(232, 232, 236, 0.45);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.category-toggle--on {
+  color: #e8e8ec;
+  border-color: rgba(255, 255, 255, 0.25);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+/* 关闭态弱化分类色圆点，强化开/关视觉区分 */
+.category-toggle:not(.category-toggle--on) .category-toggle__dot {
+  opacity: 0.35;
+}
+
+.category-toggle__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
 }
 
 .stage {

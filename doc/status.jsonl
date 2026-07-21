@@ -1,3 +1,4 @@
+{"date": "2026-07-21", "version": "0.2.11", "milestone": "M2", "summary": "FM-10 落地:顶栏 Worlens+UTC 时钟+六分类过滤,M2-18/19 ✅、M0-02 复登,e2e 43/43。BUG-026/027 FIX_READY。REV-013 视觉仲裁 11 准 1 驳待应用。余:FM-09、视觉实现、FM-11、BUG-010/028、重签核"}
 {"date": "2026-07-21", "version": "0.2.10", "milestone": "M2", "summary": "USGS M2.5+ 门槛与排序邻近度落地,M2-05/22 ✅(166 单测零红),新 fixture 真实抓取。BUG-023/024 FIX_READY 待独立复验关单。余:FM-10/09 实现、BUG-010、arch 视觉提案在途、重签核"}
 {"date": "2026-07-21", "version": "0.2.9", "milestone": "M2", "summary": "BUG-022 独立复验关单(判别力验证:还原旧码测试如期 FAIL),BUG-023/024 回填 FIX_READY。在途:qa M2-05/22 测试、arch 视觉批次一提案。下一步大切片提交 USGS门槛+排序,再 FM-10/09、BUG-010、重签核"}
 {"date": "2026-07-21", "version": "0.2.8", "milestone": "M2", "summary": "REV-012 落地:SPEC-5.0a 呈现门槛+USGS 2.5feed+排序邻近度+severity 编码入 spec 并 pin。M2-05/13 回退重测,新增 M2-22/M3-01。M2 待实现:USGS 切换/排序/FM-09/10/11。BUG-022 复验与 aes 视觉方案进行中"}
