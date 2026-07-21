@@ -177,14 +177,25 @@ def next_action():
         actions.append("待实现场景: " + ", ".join(
             "%s(%s)" % (r[0], r[3]) for r in todo))
     if not bad and not todo and rows:
-        evdirs = sorted((DOC / "evidence").glob("v0.%d.*" % m))
-        if not any((d / "regress_summary.txt").exists() for d in evdirs):
-            actions.append("场景全 ✅ → make regress 后 make evidence REGRESS=1 归档回归证据")
-        elif not any(list(d.glob("signoff-M%d*.md" % m)) for d in evdirs):
-            actions.append("回归证据已归档 → 跑 /code-review 签核，记录存 doc/evidence/v%s/signoff-M%d.md 与 doc/review/" % (ver["version"], m))
+        # BUG-028：testplan 已登记场景全 ✅ 不代表里程碑已完整——若 feature-matrix 里该 M
+        # 的某行尚未开卡（场景列仍是「(M<n> 开卡登记)」占位或空），testplan 视角对它零场景、
+        # 零可见，会误报"场景全 ✅"进而提示签核（REV-011 整改项 4）。先核对该 M 全部 FM 行
+        # 是否都已登记至少一条 testplan 场景，不满足则列出缺卡 FM 行，不提示签核。
+        fm_missing = [r[0] for r in parse_table(DOC / "feature-matrix.md", 5)
+                      if r[1] == ver["milestone"]
+                      and not re.findall(r"M\d+-\d+", r[4])]
+        if fm_missing:
+            actions.append("以下 feature-matrix 行零场景，未开卡登记（先登记 testplan 场景，不提示签核）: "
+                           + ", ".join(fm_missing))
         else:
-            actions.append("里程碑 M%d 三条判据齐备 → make bump 填 closeout → docs-check → commit → tag v%s → push → 下一里程碑 bump --milestone M%d"
-                           % (m, ver["version"], m + 1))
+            evdirs = sorted((DOC / "evidence").glob("v0.%d.*" % m))
+            if not any((d / "regress_summary.txt").exists() for d in evdirs):
+                actions.append("场景全 ✅ → make regress 后 make evidence REGRESS=1 归档回归证据")
+            elif not any(list(d.glob("signoff-M%d*.md" % m)) for d in evdirs):
+                actions.append("回归证据已归档 → 跑 /code-review 签核，记录存 doc/evidence/v%s/signoff-M%d.md 与 doc/review/" % (ver["version"], m))
+            else:
+                actions.append("里程碑 M%d 三条判据齐备 → make bump 填 closeout → docs-check → commit → tag v%s → push → 下一里程碑 bump --milestone M%d"
+                               % (m, ver["version"], m + 1))
     status_head = (DOC / "status.jsonl").read_text(
         encoding="utf-8").splitlines()[0]
     _, blocks = log_blocks()

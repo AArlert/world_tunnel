@@ -72,13 +72,20 @@ def write_record(rid, replay, log_path, spec_ref):
     return rec.relative_to(ROOT)
 
 
-# 场景描述含以下任一字样即视为声明了视觉/截图判据（BUG-008）。规则从简，只做子串匹配；
-# 如日后出现误判（例如描述提到"视觉"但并非截图判据），再细化为更精确的标记语法，勿改此处含糊了事。
+# 场景描述含以下任一字样即视为声明了视觉/截图判据（BUG-008）。
 VISUAL_MARKERS = ("截图", "视觉")
+
+# BUG-033：VISUAL_MARKERS 子串若出现在指向其他场景编号的交叉引用分句里（如 M2-13 行文
+# "其单调性验证归 M3-01/M3-03 视觉批次场景、不入本场景判据"），是对旁的场景的引用而非本场景
+# 自身声明的视觉判据，不应触发本场景的截图守卫。判定规则：按中文/英文标点把描述切成分句，
+# 同一分句内若同时出现"视觉/截图"字样与除本场景编号外的其他场景编号引用（M\d+-\d+），
+# 判定为交叉引用、跳过该分句；否则视为自声明，触发守卫。
+_CLAUSE_SPLIT_RE = re.compile(r"[，,；;。：:、]")
+_SCEN_REF_RE = re.compile(r"M\d+-\d+")
 
 
 def scenario_needs_shot(path, rid):
-    """在 testplan.md 中定位场景行，判断其描述列（第 3 列）是否声明了视觉/截图判据。
+    """在 testplan.md 中定位场景行，判断其描述列（第 3 列）是否自声明了视觉/截图判据。
     找不到该行时返回 False——行不存在会在后续 backfill_table 里报错，此处不重复拦截。"""
     for i, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
         if not line.strip().startswith("|"):
@@ -88,7 +95,13 @@ def scenario_needs_shot(path, rid):
         except MalformedRowError as e:
             sys.exit("%s 第 %d 行畸形，无法分列（%s）——先修正表格" % (path.name, i, e))
         if len(cells) > 2 and cells[0] == rid:
-            return any(m in cells[2] for m in VISUAL_MARKERS)
+            for clause in _CLAUSE_SPLIT_RE.split(cells[2]):
+                if not any(m in clause for m in VISUAL_MARKERS):
+                    continue
+                if set(_SCEN_REF_RE.findall(clause)) - {rid}:
+                    continue  # 交叉引用其他场景编号，非本场景自声明
+                return True
+            return False
     return False
 
 
