@@ -149,3 +149,10 @@
 - **证据**：本切片为 dev 实现自检:lint PASS+全量 169 单测绿(test-results/lint.log、unit_all.log);e2e severity 专项(色匹配+尺寸/脉冲递增)PASS;`vector-earth-style` 3 红=旧断言(旧色值+昼侧均匀性,与新衰减契约直接冲突)——**预告红,dev 未动测试**,归 qa 重写;marker-breathing 并行下时序 flake,单跑 PASS。场景证据(M2-15 重测+M3-02~05)未登记,归下会话 qa 卡。
 - **问题**：① M2-15/M2-13 重测卡未派,M3-02~05 未测,aes 验收未做——本会话按用户指令到 dev 回归即收尾;② 主判据采样角敏感:dev 按 ±40° 调到 2.03,若 qa 量测取 ~30°(t=0.5)比值 ~1.77 可能触 1.8 下界,采样几何以 M3-02 定死的方法为权威,落值可微调 DAY_FLOOR;③ 海岸线共用衰减 shader,非次日点昼侧采样读到压暗值(物理合理,昼端 pin 不变);④ 面板仅满足 SPEC-2.2 亮度契约,DP §5 实底 `#0c1622`/去玻璃属自由度未动,留 aes 验收判断;⑤ marker-breathing e2e 并行 flake 与 BUG-010 同类,qa 侧关注采样稳健性。
 - **下一步**：qa 重测 M2-15(按新 pin 重写 vector-earth-style,去旧均匀性断言)+M2-13(承接 BUG-029 canvas 断言)+M3-02~05 → aes 新实例 /aes-review 验收(出对照截图给用户);FM-11 量测卡(M2-23/24);BUG-010 关单、BUG-028 修 docs.py、BUG-030 rev 仲裁;aes 动效批调研(BUG-031/D27 常驻脉冲存废+光柱候选);布局批(D28 面板让位);矢量精度批(BUG-032,D29 开源方案+D24 LOD+D26 国界口径);REGRESS=1+M2 重签核(新 rev 实例)→ tag。
+
+
+## [0.2.17] 2026-07-21 M2-25 snap 场景落地+BUG-030 机械关单——SPEC-3.11 消歧句有测认领
+- **做了什么**：qa 卡:① doc/testplan.md 新登 M2-25(标记层首批 snap 对照增量淡入单测,承接 REV-014 §4-3 防蒸发),feature-matrix FM-09 场景列同步回填;② tests/marker-initial-snap.test.ts 新增(断言 A:无前态首个非空批次 instanceAlpha 初值即满值非从 0 起坡;断言 B 对照:有前态后新增标记从 0 经 tick 坡向 1;期望从 SPEC-3.11 消歧句+SPEC-3.2①+D27 推导,未照抄实现),测绿置 ✅;③ BUG-030 以同一测试 log 机械关单(关单人 qa ≠ 修复人 orch)。行文按 BUG-033 教训规避 VISUAL_MARKERS 误判词。
+- **证据**：doc/evidence/v0.2.16/M2-25.log、BUG-030.log(均 make evidence 机械生成);全量单测 22 文件 171 测试零红(test-results/unit_all.log);docs-check OK。
+- **问题**：① 观测通道走 dots InstancedMesh 的 instanceAlpha 属性与槽位分配顺序假设(newSlot=1),shader attribute 改名/分配策略变化时测试需同步维护——错位会显式 FAIL 不会假绿,属可控实现耦合;② 首批 pop 观感是否突兀归 aes 另案(REV-014 §2 边界声明),不在本场景;③ M2 开口仅余 M2-23/24(FM-11)。
+- **下一步**：qa 卡 M3-02+03(注意采样几何以 C-2 定死方法为权威,若触 1.8 下界属实现落值问题登缺陷)、qa 卡 M3-04+05;aes 新实例 /aes-review 验收(对照截图给用户);qa FM-11 量测(M2-23/24);dev 卡 BUG-028+BUG-033(scripts 串行窗口);BUG-010 qa 处置;REGRESS=1+M2 重签核(新 rev 实例)→ tag。
