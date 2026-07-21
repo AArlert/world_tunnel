@@ -20,8 +20,9 @@ world_tunnel（产品对外名 Worlens）——个人专属新闻信息流地球
 | `dev` | src/ 实现 + 自检（lint + 相关单测跑通） | 不改 tests/e2e/testplan 状态位；期望 QA 补的场景只列检查点 |
 | `qa` | tests/ e2e/ fixtures/、testplan 场景登记、测试执行与证据登记、缺陷登记与复验关单 | 断言期望值只准从 spec 推导（标注 SPEC-x.y），禁止照抄实现行为；不改 src/ |
 | `rev` | arch 交付门禁、代码/测试审查、仲裁、里程碑签核 | 只读分析 + 书面记录（doc/review/、signoff），不直接改代码 |
+| `aes` | 视觉方案制定（配色/层次/注记密度）、视觉交付审美门禁（skill `/aes-review`，判据「高级感足够」，D25） | 只读 + 截图取证 + 书面记录（doc/review/AES-*、doc/design-prompt/visual-*）；不改代码；对外可见取值须经 arch 落 spec；管「好不好看」，不代 rev 审 spec 合规 |
 
-**实例隔离（硬规则）**：同一模块的 dev 与 qa 必须不同实例；arch 与 rev 必须不同实例；实例交付即终止。
+**实例隔离（硬规则）**：同一模块的 dev 与 qa 必须不同实例；arch 与 rev 必须不同实例；同一视觉批次 aes 的制定与验收必须不同实例；实例交付即终止。
 任务卡里禁止粘贴其他实例的推理过程——只允许共享文件路径、SPEC 条目号、条目 ID。
 目的：切断共模错误传播（注意边界：隔离切不断同模型对同一 spec 的共同误读，所以歧义前置登记 + rev 锚定 spec 的审查同样重要）。
 
@@ -42,7 +43,7 @@ doc/       spec.md（单一事实源）+ 记忆系统 + testplan.md + feature-ma
            + design-prompt/（arch 产出）+ evidence/ + review/（rev 记录）+ archive/（默认不读）+ attachment/
 scripts/   机械工作脚本（docs.py / bump.py / evidence.py / regress.mjs），iverif-workflow kernel 适配版
            （regress 用 Node 不用 Python 的原因见 §4 与 BUG-001）
-.claude/   agents（arch/dev/qa/rev）与 skills（handover/dispatch/evidence/closeout）
+.claude/   agents（arch/dev/qa/rev/aes）与 skills（handover/dispatch/evidence/closeout/aes-review）
 src/       astro/（天文纯函数）globe/（three.js 场景+shader）data/（GeoEvent+providers+scheduler）
            ui/（React 面板）store/（状态）
 public/assets/textures/   NASA 公版纹理（出处登记 ASSETS.md）
