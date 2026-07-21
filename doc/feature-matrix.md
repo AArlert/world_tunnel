@@ -17,7 +17,7 @@
 | FM-09 | M2 | 缓存优先启动 | src/data/ 启动缓存 + 呼吸式过渡（SPEC-3.11, 8.4） | M2-20, M2-21, M2-25 |
 | FM-10 | M2 | 顶栏 + 基础分类过滤 | src/ui/（品牌名 Worlens · UTC 时钟 · 六 category 开关；SPEC-2.1, 2.4①, 8.1 分类子集） | M2-18, M2-19 |
 | FM-11 | M2 | 性能预算基线 | 首包/冷启动基线量测（SPEC-3.10 基线, 3.8） | M2-23, M2-24 |
-| FM-12 | M3 | 扩展信源 | providers/（GDELT/OpenSky/CoinGecko；SPEC-5.4, 5.6, 5.7；SPEC-6.3① flight-60s 保留语义随 opensky 场景承接，REV-007 F-1/BUG-016；SPEC-5.10：GDELT 归「新闻报道（待验证）」，分级由 `source` 经表派生，provider 不加字段） | （M3 开卡登记） |
+| FM-12 | M3 | 扩展信源 | providers/（GDELT/CoinGecko；SPEC-5.4, 5.7；SPEC-5.10：GDELT 归「新闻报道（待验证）」，分级由 `source` 经表派生，provider 不加字段。**OpenSky 航班图层（SPEC-5.6）与 SPEC-6.3① flight-60s 已移出 M3、改挂 M6 FM-27——REV-016/BUG-017 裁定原生端专属**） | （M3 开卡登记） |
 | FM-13 | M3 | 解析分层 T2/T2.5/T3 | src/data/geo/（gazetteer 查表 + 关键词规则 + GDELT 编码采用；SPEC-5.8, 5.4；注：SPEC-5.10 信任分级为独立于本行 SPEC-5.8 T1–T4 的正交轴，二者不得互相推导，避免与解析分层混同） | （M3 开卡登记） |
 | FM-14 | M3 | 详情卡 + 搜索 | src/ui/ 详情卡 + 缓存/地名搜索（SPEC-2.3, 2.1-ticker, 2.5；SPEC-7.4 点击飞行+详情卡分片；SPEC-2.3 改写 + SPEC-5.10：信源名/等级、`urls` 计数去重呈现、轻量纠错反馈入口） | （M3 开卡登记） |
 | FM-15 | M3 | 首启引导 + 开屏锚定 | src/ui/ 引导（垂类分流 + 粗粒度地理关注）+ src/globe/ 锚定视角（SPEC-8.6, 3.1） | （M3 开卡登记） |
@@ -32,6 +32,7 @@
 | FM-24 | M6 | App Store 内购 | iOS IAP 解锁风格包（SPEC-8.8 IAP, 3.9） | （M6 开卡登记） |
 | FM-25 | M6 | 自定义 RSS（原生） | 原生 feed 请求 + 内容展示 feed 自带为限（SPEC-5.9 原生全集, 5.8-T4 钉图；SPEC-5.10：RSS 信源默认归「新闻报道（待验证）」，显示名取 feed 标题，前向兼容） | （M6 开卡登记） |
 | FM-26 | M6 | 原生通知 | Capacitor Local Notifications（SPEC-8.3 换端） | （M6 开卡登记） |
+| FM-27 | M6 | 原生端航班图层 | providers/ OpenSky（原生请求不受 CORS 限制）+ 航班图层开关（SPEC-5.6 原生端专属；承接 SPEC-6.3① flight-60s；REV-016/BUG-017 从 M3 FM-12 改挂） | （M6 开卡登记，qa 核对 flight-60s 场景 BUG-016） |
 
 后置（无 FM 行，§9 显式登记，非蒸发）：SPEC-8.5 AI 摘要（付费，阶段二前后）、时间滑块（SPEC-6.3 预留缓存窗口）、SPEC-5.8 T4 智能解析（付费）。
 非路线图流程 gate（orch 台账跟踪）：D2 营销、**D4 商标/重名检查（已前移为近期高优，备选名征集中）**、D5 用户验证、**D12 付费意愿最小验证（发布 gate）**、D16 阶段二触发、D19 license+CLA（详见 doc/product-decisions.md 各条修订）。

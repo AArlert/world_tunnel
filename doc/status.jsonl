@@ -1,3 +1,4 @@
+{"date": "2026-07-22", "version": "0.3.1", "milestone": "M3", "summary": "BUG-017 航班图层 CORS 定向(REV-016 独立复验 opensky ACAO 钉死自有域):裁定 OpenSky 改原生端 M6 专属,SPEC-5.6 补平台归属句,FM-12 摘除/新增 FM-27,BUG-016 改挂 M6。BUG-017 FIX_READY(M6 关单)。下一步:动效批 rev 仲裁 REV-017(proposal-batch2-motion 已就绪)"}
 {"date": "2026-07-21", "version": "0.3.0", "milestone": "M3", "summary": "M3 起点:D22 最小信任层 spec 化闭环——新增 SPEC-5.10+改写 SPEC-2.3(REV-015 通过附 M-1),FM-12/13/14/25 同步,testplan 新增 M3-07~10(🔲)。下一步:M3 详情卡 design-prompt/dev,GDELT provider 落 ts 映射(R-1)"}
 {"date": "2026-07-21", "version": "0.2.23", "milestone": "M2", "summary": "M2 签核通过关门(signoff-M2.md):regress 三层 PASS+REGRESS=1 归档,三硬条件成立,REV-011 整改兑现,BUG-029 依复核关单,tag v0.2.23。开放缺陷 9 条均 M3+/工具债。下一步:M3 立项(D22 信任层前置、BUG-017 仲裁、动效批、视觉第二批)"}
 {"date": "2026-07-21", "version": "0.2.22", "milestone": "M2", "summary": "scripts 修复窗:BUG-028(签核对 FM 零场景行盲区)+BUG-033(视觉守卫交叉引用误判)双修 FIX_READY;登记 BUG-036(判据齐备提示无时效校验,签核前显式重跑规避)。余:两缺陷 qa 复验、BUG-010 治理、REGRESS+重签核→tag"}

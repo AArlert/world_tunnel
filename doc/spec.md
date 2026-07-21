@@ -18,6 +18,7 @@
 | 2026-07-21 | v0.2.8 | 噪声门槛与事件流语义（提案 design-prompt/proposal-event-noise-severity.md + proposal-stream-order.md，REV-012 裁准）：新增 SPEC-5.0a 呈现门槛跨源通则（亚门槛事件不入球不入流，球/列表共用呈现集）；SPEC-5.1 整条替换——USGS 换 M2.5+ 显著性 feed（源侧门槛 M≥2.5，BUG-023）；SPEC-2.2a 整条替换——排序改「距 now 时间邻近度升序」（BUG-024）+ 行内 severity 三档单调非色相编码、数值不作显式元素（BUG-025，造型值待 D25 定）。同步 testplan：M2-05/M2-13 判据改写回退 🔲 重测，新增 M2-22（排序邻近度）、M3-01（severity 单调编码，D25 定值前禁 ✅） |
 | 2026-07-21 | v0.2.16 | SPEC-3.11 过渡范围消歧（BUG-030，REV-014 仲裁裁定读法 a）：补一句夹注——呼吸式过渡以「已有在屏状态」为前态、只表达增量；无前态（全新安装无缓存/缓存空/读取失败）时首个非空批次直接 snap 上屏不淡入（与 SPEC-3.2① 初始无淡入及 D27 增量语义一致）。属消歧澄清非新行为；testplan 影响：M2-20/21 维持现范围与 ✅，另派 qa 新登「首批 snap 对照增量淡入」标记层单测场景（REV-014 §4-3 防蒸发） |
 | 2026-07-21 | v0.3.0 | M3 起点·最小信任层（D22，提案 design-prompt/proposal-trust-tier.md，REV-015 仲裁通过附 M-1 文本修正）：新增 SPEC-5.10 信源信任分级（权威事件源/新闻报道待验证两级，由 `source` 经表派生、不入 GeoEvent 模型，与 SPEC-5.8 T1–T4 解耦为正交轴）；SPEC-2.3 事件详情卡全文替换（新增信源名与信任等级、时间语义澄清=复用 `ts`、去重呈现=单事件 `urls[]` 链接计数禁跨源暗示、轻量纠错反馈入口=mailto/issue 零服务器）。SPEC-6.1/6.3①/2.2a/5.8 不改（REV-015 §7 校验无子句蒸发）。同步：feature-matrix FM-12/13/14/25 交付物描述、testplan 新增 M3 详情卡场景（qa 登记，断言依 R-2 口径写「取 GeoEvent ts」不得断言「=真实发布时刻」） |
+| 2026-07-22 | v0.3.1 | 航班图层平台归属（BUG-017，REV-016 仲裁方向①，独立 curl 复验 opensky ACAO=`https://opensky-network.org` 钉死自有域、三对照源通配）：SPEC-5.6 补平台归属句——OpenSky 航班图层改**原生端（Capacitor）专属挂 M6**（web/PWA 浏览器同源策略封死直连、§9 零服务器不得代理绕过，比照 SPEC-5.9 先例），OpenSky 保留为源、源接口/severity 恒 1/关图层停拉不变；web/PWA 端（M5）呈禁用态并明示。涟漪：FM-12 摘除 OpenSky/flight-60s（保留 GDELT/CoinGecko 于 M3）、新增 FM-27（M6 原生端航班图层承接 SPEC-5.6+SPEC-6.3① flight-60s）；BUG-016 flight-60s 改挂 M6、复验条件改「M6 native 航班图层开卡」。SPEC-6.3①/5.10/5.8 语义不变（留痕防误改） |
 
 ## 1. 产品概述
 
@@ -133,7 +134,8 @@
   - `https://ll.thespacedevs.com/2.2.0/launch/upcoming/?limit=10&mode=detailed`，轮询 1800s（免费额 15 req/h，预算 ≤2 req/h；`mode=detailed` 仅增大单响应体，请求数不变仍 2 req/h）。改用 `mode=detailed` 因 `mode=list` 响应不含发射工位坐标。
   - 字段映射：`id=ll2:{results[].id}`；坐标取发射工位 `pad.latitude`/`pad.longitude`（字符串数值，parse 为 number）；title=`name`；summary=`mission.description`；urls 取 `infoURLs[].url` ∪ `vidURLs[].url`，二者皆空时回落自链 `url`（保证 urls≥1）；ts=`net`（T-0，ISO 含 `Z`，`Date.parse` 直接得 UTC）。
   - severity：以 `net` 相对当前时刻的**剩余时间（仅未来方向）**分档——T-1h 内 3，T-24h 内 2，其余 1；**`net` 已过去（发射已发生，`net ≤ now`）时归「其余」档 = 1**，不取绝对值双向对称、不因刚发射而按时间距离判为高档（记录仍在则以最低紧迫度留屏）。
-- **SPEC-5.6 OpenSky 航班图层** → category `flight`（默认关闭，开启才轮询）
+- **SPEC-5.6 OpenSky 航班图层** → category `flight`（**原生端（Capacitor）专属能力，M6**；默认关闭，开启才轮询）
+  - **平台归属（BUG-017，REV-016 方向①）**：OpenSky `states/all` 的 `Access-Control-Allow-Origin` 钉死自有域（实测 `https://opensky-network.org`、非通配），web/PWA 浏览器直连被同源策略封死，且 §9 阶段一零服务器不得自建 CORS 代理绕过——故航班图层归**原生端（Capacitor，M6）**，比照 SPEC-5.9「CORS 受限能力归原生端」先例。原生端请求不受 CORS 约束，照下述源接口实现。**web/PWA 端（M5）不呈现航班图层开关，或呈禁用态并明确提示受浏览器同源策略限制**（比照 SPEC-5.9 对非 CORS-open feed 的明示要求）。
   - `https://opensky-network.org/api/states/all?lamin=…&lomin=…&lamax=…&lomax=…`（当前视口 bbox），轮询 60s，匿名额度内；关图层立即停拉。severity 恒 1。
 - **SPEC-5.7 CoinGecko 行情 ticker**（非地理事件，只进顶栏）
   - `https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum&vs_currencies=usd&include_24hr_change=true`，轮询 60s；币种清单 M4 起可配置。
