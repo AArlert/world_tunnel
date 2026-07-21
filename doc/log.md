@@ -1,5 +1,11 @@
 # log — 交接日志（新的在上；仓库内最多 4 块，超限 `make docs-archive`）
 
+## [0.2.19] 2026-07-21 M3-04/05 相对亮度契约双绿——星空封顶+面板暗于球
+- **做了什么**：① qa 卡:M3-04(e2e/star-brightness-cap.spec.ts 新增,默认+旋转两组代表性机位,左侧 12% 窄条采样排除大气辉光伪高读数,实测最大 luma 83/95 远低于海岸线阈值 137.6)、M3-05(e2e/panel-brightness-cap.spec.ts 新增,量测口径=面板 CSS 声明底色 RGB 而非合成后像素——spec 将实底/玻璃列为实现自由度,合成像素随叠加位置浮动非契约量,口径引 REV-013 §5.3 同法);两场景 ✅,globeDebug 增 maxLumaInRegion。② orch 回填 BUG-025 至 FIX_READY(spec 侧 v0.2.8+v0.2.13 pin、实现侧视觉批次一 v0.2.15 均已落地,机械复验锚定 M3-01)。
+- **证据**：doc/evidence/v0.2.18/M3-04.log+png、M3-05.log+png;全量 e2e 52 例 51 绿(唯一红=BUG-010 家族 marker-breathing,隔离复跑绿);lint PASS。
+- **问题**：① M3-04「任意机位」e2e 只取两组代表性采样,穷举不可行(测试注释已声明);② M3-05 折叠态共享同一 background 声明未单独断言;③ M3-05 口径(CSS 声明色 vs 合成像素)属 qa 明确设计选择,如需变更走口径讨论非缺陷;④ 视觉批次一机械场景仅余 M3-01(行明度三档,BUG-025 关单锚点)。
+- **下一步**：并行:qa 卡 M3-01+BUG-025 关单、aes 新实例 /aes-review 验收(对照截图给用户);其后 qa FM-11 量测(M2-23/24)、dev 卡 BUG-028+BUG-033(scripts 串行窗口)、BUG-010 qa 处置、REGRESS=1+M2 重签核(新 rev 实例)→ tag。
+
 ## [0.2.18] 2026-07-21 M3-02/03 视觉契约实测双绿——昼夜对比与 severity 三通道有测锚定
 - **做了什么**：qa 卡实测视觉批次一两大契约场景:① M3-02 昼夜对比(e2e/day-night-hemisphere-contrast.spec.ts 新增):C-2 定死方法落地——±40° 对称采样、Rec.709 luma 直接加权、亮像素排除阈值 90(注释定稿)、采样几何用「同一均匀底面点在对称 sunDir 下两次采样」等价实现+method-sanity 断言;主判据落 [1.8,2.6]、副判据 ≥1.3 均过,未触下界(dev 落值经权威几何验证站住)。② M3-03 severity 三通道(e2e/marker-severity-tri-channel.spec.ts 新增):取 REV-013 §3.1 路径 b,三色相族×三档逐通道 ±6/255、色相不变量 ±2°、L/S 单调、发光通道黑盒读环实例缩放(sev1 恒 0/sev2 静态波动<3%/sev3 脉冲波动>15%,按累计真实毫秒推进防 flake)。globeDebug 增两 helper。qa 自设的 sev1 像素计数下限 40→20 属测试基建阈值自调,非判据变更。
 - **证据**：doc/evidence/v0.2.17/M3-02.log+M3-02-day-night-hemisphere-contrast.png、M3-03.log+两张截图(三档分层+发光对照);全量 e2e 49/50(唯一红 marker-breathing 隔离复跑绿,与 BUG-010 已登记条目逐字吻合,不另开单);lint PASS。
@@ -11,15 +17,3 @@
 - **证据**：doc/evidence/v0.2.16/M2-25.log、BUG-030.log(均 make evidence 机械生成);全量单测 22 文件 171 测试零红(test-results/unit_all.log);docs-check OK。
 - **问题**：① 观测通道走 dots InstancedMesh 的 instanceAlpha 属性与槽位分配顺序假设(newSlot=1),shader attribute 改名/分配策略变化时测试需同步维护——错位会显式 FAIL 不会假绿,属可控实现耦合;② 首批 pop 观感是否突兀归 aes 另案(REV-014 §2 边界声明),不在本场景;③ M2 开口仅余 M2-23/24(FM-11)。
 - **下一步**：qa 卡 M3-02+03(注意采样几何以 C-2 定死方法为权威,若触 1.8 下界属实现落值问题登缺陷)、qa 卡 M3-04+05;aes 新实例 /aes-review 验收(对照截图给用户);qa FM-11 量测(M2-23/24);dev 卡 BUG-028+BUG-033(scripts 串行窗口);BUG-010 qa 处置;REGRESS=1+M2 重签核(新 rev 实例)→ tag。
-
-## [0.2.16] 2026-07-21 M2-15/13 重测双绿+REV-014 冷启动 snap 消歧入 spec——预告红清零
-- **做了什么**：① qa 重测卡:e2e/vector-earth-style.spec.ts 按 v0.2.13 pin 重写(3 预告红→3/3 PASS,删与 SPEC-3.2① 衰减契约矛盾的旧「昼侧均匀性」断言,衰减比值归 M3-02;网格判据因 `#1e3a5f` 落在衰减输出容差内改黑盒断言线层 visible),e2e/event-panel.spec.ts 补 canvas 占满视口+面板悬浮不挤占(承接 BUG-029)+圆点色相断言与不变量 A+排序判别用例,M2-15/M2-13 双 ✅(M2-13 行文同步补 BUG-029 子句,属覆盖补齐)。② rev 仲裁 BUG-030:REV-014 三维度一致裁定读法 a——无前态首批 snap 上屏不淡入,呼吸只表达增量;orch 应用 SPEC-3.11 消歧句并 pin(v0.2.16),现实现零改动,M2-20/21 维持 ✅。③ 台账:BUG-030 置 FIX_READY(待 qa 新登 snap 场景机械关单)、BUG-032③ 复核标注已兑现(余①②归视觉第二批)、BUG-033 新登记(evidence.py VISUAL_MARKERS 把 M2-13 行文中「视觉批次」交叉引用误判为视觉场景强索截图,BUG-008 预警残留兑现)、BUG-010 观察面再扩(marker-breathing 纳入负载敏感 flake 家族)。④ D27 补光柱视觉参照(用户拍板:《流浪地球》行星发动机式体积光柱,aes 动效批以此为形态基准)。
-- **证据**：doc/evidence/v0.2.15/M2-15.log+M2-15-vector-earth-day.png、M2-13.log+M2-13-event-panel-canvas-layout.png(均 make evidence 机械生成);全量 e2e 46/47(唯一红 marker-breathing 单跑 PASS,已记 BUG-010);lint PASS;REV-014 记录 doc/review/REV-014-cache-snap-arbitration.md。
-- **问题**：① M2 开口余 M2-23/24(FM-11 量测)+REV-014 §4-3 要求的 snap 新场景;② BUG-033 使非视觉场景被强索截图,dev 修 evidence.py 时与 BUG-028(docs.py FM 行零场景检查)可并卡,但须避开 qa 用 evidence 的时段;③ M3-02 采样角敏感风险仍在(dev 自验 ±40°=2.03,若量测几何取值不同可能触 1.8 下界,落值可微调 DAY_FLOOR);④ aes 验收与 M3-02~05 未做。
-- **下一步**：qa 卡:新登 M2-25 snap 场景+测绿+BUG-030 关单;qa 卡 M3-02+03、M3-04+05;aes 新实例 /aes-review 验收(对照截图给用户);qa FM-11 量测(M2-23/24);dev 卡 BUG-028+BUG-033(scripts,串行窗口);BUG-010 qa 处置;REGRESS=1+M2 重签核(新 rev 实例)→ tag。
-
-## [0.2.15] 2026-07-21 视觉批次一实现落地——色值/连续衰减/severity 分层/面板明度上球
-- **做了什么**：dev 视觉批次一实现卡交付(6 个 src 文件):① shaders/vectorEarth.ts 昼半球离日角连续衰减(SPEC-3.2①,dayFalloff=0.25+0.75·t²,数值自验主判据 ±40° 昼:夜=2.03∈[1.8,2.6]、副判据 1.36≥1.3);② vectorEarth.ts 底面两端显式 pin `#1f4468`/`#0d1827`+海岸线 `#6690b3`+夜辉光 `#3a5a72`+经纬网默认隐藏(grid.visible=false,构建/dispose 保留待 LOD);③ markers.ts 新增 deriveSeverityColor(从 CATEGORY_COLORS 按 SPEC-3.7 乘子 sRGB-HSL 派生,不硬编码;六类派生值与 spec 表逐字核对全对)+ringSize 助手(sev1 无环/sev2 静态环/sev3 脉冲,脉冲机制未动待动效批);④ EventPanel.tsx 行首点镜像派生色+行 severity class;⑤ index.css 标题明度三档 `#eef2f7`/`#c2ccd8`/`#8794a3`(走 li class+CSS,避开 event-panel-sort 正则、贴 category-toggle--on 惯例);⑥ starfield.ts 逐星亮度分布,最亮星 luma≈114 < 海岸线≈138(SPEC-3.5)。
-- **证据**：本切片为 dev 实现自检:lint PASS+全量 169 单测绿(test-results/lint.log、unit_all.log);e2e severity 专项(色匹配+尺寸/脉冲递增)PASS;`vector-earth-style` 3 红=旧断言(旧色值+昼侧均匀性,与新衰减契约直接冲突)——**预告红,dev 未动测试**,归 qa 重写;marker-breathing 并行下时序 flake,单跑 PASS。场景证据(M2-15 重测+M3-02~05)未登记,归下会话 qa 卡。
-- **问题**：① M2-15/M2-13 重测卡未派,M3-02~05 未测,aes 验收未做——本会话按用户指令到 dev 回归即收尾;② 主判据采样角敏感:dev 按 ±40° 调到 2.03,若 qa 量测取 ~30°(t=0.5)比值 ~1.77 可能触 1.8 下界,采样几何以 M3-02 定死的方法为权威,落值可微调 DAY_FLOOR;③ 海岸线共用衰减 shader,非次日点昼侧采样读到压暗值(物理合理,昼端 pin 不变);④ 面板仅满足 SPEC-2.2 亮度契约,DP §5 实底 `#0c1622`/去玻璃属自由度未动,留 aes 验收判断;⑤ marker-breathing e2e 并行 flake 与 BUG-010 同类,qa 侧关注采样稳健性。
-- **下一步**：qa 重测 M2-15(按新 pin 重写 vector-earth-style,去旧均匀性断言)+M2-13(承接 BUG-029 canvas 断言)+M3-02~05 → aes 新实例 /aes-review 验收(出对照截图给用户);FM-11 量测卡(M2-23/24);BUG-010 关单、BUG-028 修 docs.py、BUG-030 rev 仲裁;aes 动效批调研(BUG-031/D27 常驻脉冲存废+光柱候选);布局批(D28 面板让位);矢量精度批(BUG-032,D29 开源方案+D24 LOD+D26 国界口径);REGRESS=1+M2 重签核(新 rev 实例)→ tag。

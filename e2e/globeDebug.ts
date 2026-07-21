@@ -650,6 +650,50 @@ export async function sampleBoxExcludingBright(
 }
 
 /**
+ * M3-04 用：在 canvas 指定矩形区域内逐像素计算 **gamma 编码 Rec.709 luma**
+ * （`0.2126R'+0.7152G'+0.0722B'`，直接对 0-255 sRGB 值加权、不线性化，与
+ * day-night-hemisphere-contrast.spec.ts C-2 亮度定义同法），返回区域内最大 luma 值与其
+ * 像素坐标（设备像素，供断言失败时定位是哪个像素）。不预设星点具体颜色/位置/数量，只在
+ * 给定安全区域内找最亮像素，用于「星最大亮度不高于某已知色」（SPEC-3.5）一类相对上限判据。
+ * 帧内同步读取的原因与 samplePixelBox 一致（见其注释）。
+ */
+export async function maxLumaInRegion(
+  page: Page,
+  region: { x: number; y: number; width: number; height: number },
+): Promise<{ maxLuma: number; x: number; y: number }> {
+  return page.evaluate(
+    ({ region }) =>
+      new Promise<{ maxLuma: number; x: number; y: number }>((resolve) => {
+        requestAnimationFrame(() => {
+          const canvas = document.querySelector('#globe-container canvas') as HTMLCanvasElement
+          const off = document.createElement('canvas')
+          off.width = canvas.width
+          off.height = canvas.height
+          const ctx = off.getContext('2d')!
+          ctx.drawImage(canvas, 0, 0)
+          const data = ctx.getImageData(region.x, region.y, region.width, region.height).data
+          let maxLuma = -1
+          let mx = -1
+          let my = -1
+          for (let py = 0; py < region.height; py++) {
+            for (let px = 0; px < region.width; px++) {
+              const i = (py * region.width + px) * 4
+              const luma = 0.2126 * data[i] + 0.7152 * data[i + 1] + 0.0722 * data[i + 2]
+              if (luma > maxLuma) {
+                maxLuma = luma
+                mx = region.x + px
+                my = region.y + py
+              }
+            }
+          }
+          resolve({ maxLuma, x: mx, y: my })
+        })
+      }),
+    { region },
+  )
+}
+
+/**
  * BUG-022 复验用：在 canvas 指定矩形区域内统计"近白/饱和"像素——三通道同时 ≥ minChannel
  * 的像素（即 min(R,G,B) ≥ minChannel）。纯白 (255,255,255) 与近白不属 SPEC-3.7 六分类色
  * 表中任何分类色（该表六色的 min 通道均 ≤ 127），也不属两分类色普通透明混合的结果（红缺

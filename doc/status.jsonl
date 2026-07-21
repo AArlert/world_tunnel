@@ -1,3 +1,4 @@
+{"date": "2026-07-21", "version": "0.2.19", "milestone": "M2", "summary": "M3-04/05 双绿(星空封顶 83/95<137.6、面板 CSS 底色暗于夜面),BUG-025 回填 FIX_READY 锚定 M3-01。视觉批次一机械场景余 M3-01。下一步:M3-01+BUG-025 关单与 aes 验收并行,再 FM-11、scripts 修复窗、REGRESS+重签核"}
 {"date": "2026-07-21", "version": "0.2.18", "milestone": "M2", "summary": "M3-02/03 实测双绿:昼夜对比主判据落 [1.8,2.6] 未触界(C-2 权威几何),severity 三通道逐档验证,e2e 49/50(唯一红=BUG-010 旧 flake)。余:M3-04/05、aes 验收、FM-11、BUG-028/033/010、REGRESS+重签核"}
 {"date": "2026-07-21", "version": "0.2.17", "milestone": "M2", "summary": "M2-25 snap 场景新登并测绿(SPEC-3.11 消歧句有测认领),BUG-030 机械关单,171 单测零红。M2 开口余 M2-23/24。下一步:M3-02~05 视觉场景、aes 验收、FM-11、BUG-028/033/010、REGRESS+重签核"}
 {"date": "2026-07-21", "version": "0.2.16", "milestone": "M2", "summary": "M2-15/13 重测双绿(预告红清零,承接 BUG-029);REV-014 裁定无缓存首批 snap,SPEC-3.11 消歧入 spec 并 pin;BUG-030 FIX_READY、BUG-033 新登记、D27 补光柱参照。余:snap 新场景、M3-02~05、aes 验收、FM-11、BUG-028/033/010、重签核"}
