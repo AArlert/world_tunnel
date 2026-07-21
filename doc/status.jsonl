@@ -1,3 +1,4 @@
+{"date": "2026-07-21", "version": "0.2.17", "milestone": "M2", "summary": "M2-25 snap 场景新登并测绿(SPEC-3.11 消歧句有测认领),BUG-030 机械关单,171 单测零红。M2 开口余 M2-23/24。下一步:M3-02~05 视觉场景、aes 验收、FM-11、BUG-028/033/010、REGRESS+重签核"}
 {"date": "2026-07-21", "version": "0.2.16", "milestone": "M2", "summary": "M2-15/13 重测双绿(预告红清零,承接 BUG-029);REV-014 裁定无缓存首批 snap,SPEC-3.11 消歧入 spec 并 pin;BUG-030 FIX_READY、BUG-033 新登记、D27 补光柱参照。余:snap 新场景、M3-02~05、aes 验收、FM-11、BUG-028/033/010、重签核"}
 {"date": "2026-07-21", "version": "0.2.15", "milestone": "M2", "summary": "视觉批次一实现上球:SPEC-3.2a 色值+连续衰减+网格隐藏、SPEC-3.7 severity 三通道、SPEC-2.2a 行明度、星空封顶。lint+169 单测绿;vector-earth-style 3 红=旧断言预告红。余:qa 重测 M2-15/13+M3-02~05、aes 验收、FM-11、BUG-010/028、重签核"}
 {"date": "2026-07-21", "version": "0.2.14", "milestone": "M2", "summary": "FM-09 落地:呼吸过渡状态机+缓存链路核对,M2-20/21 ✅(169 单测/9 e2e 零回归)。用户反馈落 D27~29+BUG-031/032(常驻脉冲否决/开源优先)。余:视觉实现消 M2-15、M2-13 重测、FM-11、BUG-010/028、重签核"}
@@ -5,8 +6,3 @@
 {"date": "2026-07-21", "version": "0.2.12", "milestone": "M2", "summary": "BUG-026/027 机械关单+BUG-014 流程口径关单(核对记录),登记 BUG-029(SPEC-2.2 canvas 无人认领)。UX 七单关五。下一步:REV-013 条文应用 v0.2.13、dev FM-09、视觉实现、重签核"}
 {"date": "2026-07-21", "version": "0.2.11", "milestone": "M2", "summary": "FM-10 落地:顶栏 Worlens+UTC 时钟+六分类过滤,M2-18/19 ✅、M0-02 复登,e2e 43/43。BUG-026/027 FIX_READY。REV-013 视觉仲裁 11 准 1 驳待应用。余:FM-09、视觉实现、FM-11、BUG-010/028、重签核"}
 {"date": "2026-07-21", "version": "0.2.10", "milestone": "M2", "summary": "USGS M2.5+ 门槛与排序邻近度落地,M2-05/22 ✅(166 单测零红),新 fixture 真实抓取。BUG-023/024 FIX_READY 待独立复验关单。余:FM-10/09 实现、BUG-010、arch 视觉提案在途、重签核"}
-{"date": "2026-07-21", "version": "0.2.9", "milestone": "M2", "summary": "BUG-022 独立复验关单(判别力验证:还原旧码测试如期 FAIL),BUG-023/024 回填 FIX_READY。在途:qa M2-05/22 测试、arch 视觉批次一提案。下一步大切片提交 USGS门槛+排序,再 FM-10/09、BUG-010、重签核"}
-{"date": "2026-07-21", "version": "0.2.8", "milestone": "M2", "summary": "REV-012 落地:SPEC-5.0a 呈现门槛+USGS 2.5feed+排序邻近度+severity 编码入 spec 并 pin。M2-05/13 回退重测,新增 M2-22/M3-01。M2 待实现:USGS 切换/排序/FM-09/10/11。BUG-022 复验与 aes 视觉方案进行中"}
-{"date": "2026-07-21", "version": "0.2.7", "milestone": "M2", "summary": "REV-011 驳回 M2 签核:FM-09/10/11 未开卡。整改开动:M2-18/19 已登记,BUG-022(叠色发白)已修待复验,BUG-023~028 在案。REV-012 仲裁两份 spec 提案中。新增 aes 审美官角色。下一步 FM-09/11 登记、FM-10 实现、重签核"}
-{"date": "2026-07-21", "version": "0.2.6", "milestone": "M2", "summary": "FM-07 收口：标记层+面板+双向联动,真实事件上球;M2-10~14 ✅(BUG-021 拾取缺陷 qa 揪出→dev 修→关单)。M2 十七场景全 ✅,159 单测+34 e2e 绿。下一步 preview 验收通知产品负责人,再 FM-09/10/11"}
-{"date": "2026-07-21", "version": "0.2.5", "milestone": "M2", "summary": "FM-08 矢量默认落地：M2-15/16/17 ✅,BUG-020 关单,三条 e2e 适配,首包 800KB(gzip 224KB)。全量 147 单测+23 e2e 绿。夜面辉光观感待产品负责人 preview 验收。下一步 dev FM-07 标记层+面板"}

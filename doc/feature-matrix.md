@@ -14,7 +14,7 @@
 | FM-06 | M2 | T1 信源 | src/data/providers/（USGS/EONET/GDACS/LL2；SPEC-5.1, 5.2, 5.3, 5.5, 5.8-T1） | M2-05, M2-06, M2-07, M2-08 |
 | FM-07 | M2 | 事件标记 + 面板 | src/globe/ 标记层 + src/ui/ 事件流面板（SPEC-2.2, 3.7, 3.8；SPEC-3.4 不遮挡真标记回补；SPEC-7.4 列表↔标记联动分片） | M2-10, M2-11, M2-12, M2-13, M2-14, M2-22, M3-01, M3-02, M3-03, M3-04, M3-05, M3-06 |
 | FM-08 | M2 | 矢量默认风格 | src/globe/ 矢量昼夜风格，替换卫星默认（SPEC-3.2 重写, 3.3） | M2-15, M2-16, M2-17 |
-| FM-09 | M2 | 缓存优先启动 | src/data/ 启动缓存 + 呼吸式过渡（SPEC-3.11, 8.4） | M2-20, M2-21 |
+| FM-09 | M2 | 缓存优先启动 | src/data/ 启动缓存 + 呼吸式过渡（SPEC-3.11, 8.4） | M2-20, M2-21, M2-25 |
 | FM-10 | M2 | 顶栏 + 基础分类过滤 | src/ui/（品牌名 Worlens · UTC 时钟 · 六 category 开关；SPEC-2.1, 2.4①, 8.1 分类子集） | M2-18, M2-19 |
 | FM-11 | M2 | 性能预算基线 | 首包/冷启动基线量测（SPEC-3.10 基线, 3.8） | M2-23, M2-24 |
 | FM-12 | M3 | 扩展信源 | providers/（GDELT/OpenSky/CoinGecko；SPEC-5.4, 5.6, 5.7；SPEC-6.3① flight-60s 保留语义随 opensky 场景承接，REV-007 F-1/BUG-016） | （M3 开卡登记） |
