@@ -1,3 +1,4 @@
+{"date": "2026-07-21", "version": "0.2.16", "milestone": "M2", "summary": "M2-15/13 重测双绿(预告红清零,承接 BUG-029);REV-014 裁定无缓存首批 snap,SPEC-3.11 消歧入 spec 并 pin;BUG-030 FIX_READY、BUG-033 新登记、D27 补光柱参照。余:snap 新场景、M3-02~05、aes 验收、FM-11、BUG-028/033/010、重签核"}
 {"date": "2026-07-21", "version": "0.2.15", "milestone": "M2", "summary": "视觉批次一实现上球:SPEC-3.2a 色值+连续衰减+网格隐藏、SPEC-3.7 severity 三通道、SPEC-2.2a 行明度、星空封顶。lint+169 单测绿;vector-earth-style 3 红=旧断言预告红。余:qa 重测 M2-15/13+M3-02~05、aes 验收、FM-11、BUG-010/028、重签核"}
 {"date": "2026-07-21", "version": "0.2.14", "milestone": "M2", "summary": "FM-09 落地:呼吸过渡状态机+缓存链路核对,M2-20/21 ✅(169 单测/9 e2e 零回归)。用户反馈落 D27~29+BUG-031/032(常驻脉冲否决/开源优先)。余:视觉实现消 M2-15、M2-13 重测、FM-11、BUG-010/028、重签核"}
 {"date": "2026-07-21", "version": "0.2.13", "milestone": "M2", "summary": "REV-013 落地:视觉批次一入 spec 并 pin(色值体系/昼夜对比契约/severity 三通道分层/SPEC-2.2a 填值),M2-15 回退重测,新增 M3-02~06。在途:dev FM-09。下一步:视觉实现、qa 重测、aes 验收、FM-11、重签核"}
