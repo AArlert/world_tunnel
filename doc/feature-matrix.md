@@ -17,9 +17,9 @@
 | FM-09 | M2 | 缓存优先启动 | src/data/ 启动缓存 + 呼吸式过渡（SPEC-3.11, 8.4；**SPEC-3.11a reduced-motion P1 降级——稳态无动画、增量呼吸瞬切，SPEC-3.11 呼吸本身不改**） | M2-20, M2-21, M2-25 |
 | FM-10 | M2 | 顶栏 + 基础分类过滤 | src/ui/（品牌名 Worlens · UTC 时钟 · 六 category 开关；SPEC-2.1, 2.4①, 8.1 分类子集） | M2-18, M2-19 |
 | FM-11 | M2 | 性能预算基线 | 首包/冷启动基线量测（SPEC-3.10 基线, 3.8） | M2-23, M2-24 |
-| FM-12 | M3 | 扩展信源 | providers/（GDELT/CoinGecko；SPEC-5.4, 5.7；SPEC-5.10：GDELT 归「新闻报道（待验证）」，分级由 `source` 经表派生，provider 不加字段。**OpenSky 航班图层（SPEC-5.6）与 SPEC-6.3① flight-60s 已移出 M3、改挂 M6 FM-27——REV-016/BUG-017 裁定原生端专属**） | （M3 开卡登记） |
+| FM-12 | M3 | 扩展信源 | providers/（GDELT；SPEC-5.4；SPEC-5.10：GDELT 归「新闻报道（待验证）」，分级由 `source` 经表派生，provider 不加字段。**CoinGecko 行情 ticker 已删除（R2/D31，原 SPEC-5.7 处死）；OpenSky 航班图层（SPEC-5.6）与 SPEC-6.3① flight-60s 已移出 M3、改挂 M6 FM-27——REV-016/BUG-017 裁定原生端专属**） | （M3 开卡登记） |
 | FM-13 | M3 | 解析分层 T2/T2.5/T3 | src/data/geo/（gazetteer 查表 + 关键词规则 + GDELT 编码采用；SPEC-5.8, 5.4；注：SPEC-5.10 信任分级为独立于本行 SPEC-5.8 T1–T4 的正交轴，二者不得互相推导，避免与解析分层混同） | （M3 开卡登记） |
-| FM-14 | M3 | 详情卡 + 搜索 | src/ui/ 详情卡 + 缓存/地名搜索（SPEC-2.3, 2.1-ticker, 2.5；SPEC-7.4 点击飞行+详情卡分片；SPEC-2.3 改写 + SPEC-5.10：信源名/等级、`urls` 计数去重呈现、轻量纠错反馈入口） | （M3 开卡登记） |
+| FM-14 | M3 | 详情卡 + 搜索 | src/ui/ 详情卡 + 缓存/地名搜索（SPEC-2.3, 2.5；SPEC-7.4 点击飞行+详情卡分片；SPEC-2.3 改写 + SPEC-5.10：信源名/等级、`urls` 计数去重呈现、轻量纠错反馈入口） | （M3 开卡登记） |
 | FM-15 | M3 | 首启引导 + 开屏锚定 | src/ui/ 引导（垂类分流 + 粗粒度地理关注）+ src/globe/ 锚定视角（SPEC-8.6, 3.1） | （M3 开卡登记） |
 | FM-16 | M4 | 高级个性化 | watchlist（地点/关键词）+ 过滤模式 + 持久化（SPEC-8.1, 8.2, 8.4） | （M4 开卡登记） |
 | FM-17 | M4 | 事件保留 | 收藏永久保存 + 过期窗 48–72h 可配（SPEC-6.3, 8.4） | （M4 开卡登记） |
