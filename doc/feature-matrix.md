@@ -12,7 +12,7 @@
 | FM-04 | M1 | 地球交互 | src/globe/（拖拽/缩放/惯性/自转；SPEC-7.1/7.2/7.3/7.5。SPEC-7.4 未交付，拆挂 FM-07+FM-14） | M1-09, M1-10, M1-11 |
 | FM-05 | M2 | 数据核心 | src/data/（GeoEvent/scheduler/缓存/去重/过期；SPEC-5.0, 5.0a, 6.1, 6.2, 6.3） | M2-01, M2-02, M2-03, M2-04, M2-09 |
 | FM-06 | M2 | T1 信源 | src/data/providers/（USGS/EONET/GDACS/LL2；SPEC-5.1, 5.2, 5.3, 5.5, 5.8-T1） | M2-05, M2-06, M2-07, M2-08 |
-| FM-07 | M2 | 事件标记 + 面板 | src/globe/ 标记层 + src/ui/ 事件流面板（SPEC-2.2, 3.7, 3.8；SPEC-3.4 不遮挡真标记回补；SPEC-7.4 列表↔标记联动分片。**动效批 D27/BUG-031：SPEC-3.7a 光柱形态与静态体积辉光、SPEC-3.7b 静态新鲜度、SPEC-3.7c 标记 LOD 聚合——dev 实现待动效批 design-prompt**） | M2-10, M2-11, M2-12, M2-13, M2-14, M2-22, M3-01, M3-02, M3-03, M3-04, M3-05, M3-06 |
+| FM-07 | M2 | 事件标记 + 面板 | src/globe/ 标记层 + src/ui/ 事件流面板（SPEC-2.2, 3.7, 3.8；SPEC-3.4 不遮挡真标记回补；SPEC-7.4 列表↔标记联动分片。**动效批 D27/BUG-031：SPEC-3.7a 光柱形态与静态体积辉光、SPEC-3.7b 静态新鲜度、SPEC-3.7c 标记 LOD 聚合——dev 实现待动效批 design-prompt**。R3/M3 抽屉化见 FM-29） | M2-10, M2-11, M2-12, M2-13, M2-14, M2-22, M3-01, M3-02, M3-03, M3-04, M3-05, M3-06 |
 | FM-08 | M2 | 矢量默认风格 | src/globe/ 矢量昼夜风格，替换卫星默认（SPEC-3.2 重写, 3.3） | M2-15, M2-16, M2-17 |
 | FM-09 | M2 | 缓存优先启动 | src/data/ 启动缓存 + 呼吸式过渡（SPEC-3.11, 8.4；**SPEC-3.11a reduced-motion P1 降级——稳态无动画、增量呼吸瞬切，SPEC-3.11 呼吸本身不改**） | M2-20, M2-21, M2-25 |
 | FM-10 | M2 | 顶栏 + 基础分类过滤 | src/ui/（品牌名 Worlens · UTC 时钟 · 六 category 开关；SPEC-2.1, 2.4①, 8.1 分类子集） | M2-18, M2-19 |
@@ -34,6 +34,7 @@
 | FM-26 | M6 | 原生通知 | Capacitor Local Notifications（SPEC-8.3 换端） | （M6 开卡登记） |
 | FM-27 | M6 | 原生端航班图层 | providers/ OpenSky（原生请求不受 CORS 限制）+ 航班图层开关（SPEC-5.6 原生端专属；承接 SPEC-6.3① flight-60s；REV-016/BUG-017 从 M3 FM-12 改挂） | （M6 开卡登记，qa 核对 flight-60s 场景 BUG-016） |
 | FM-28 | M3 | 守望最小闭环 | src/data/ 守望匹配 + src/store/ 守望对象本地存 + src/ui/ 过滤模式（地方/人/主题守望 → 命中 → 隔离式呈现 + 仅守望命中过滤；SPEC-8.1 M3 最小形态, 8.2 仅命中模式, 8.6 引导采集；R7/REV-020 授权，DEV 开卡前 arch 出 design-prompt——REV-020 遗留义务 1） | M3-11, M3-12 |
+| FM-29 | M3 | 静谧默认态与安好态 | src/ui/ 表盘默认态（事件流面板退位默认收起「今日刻痕」抽屉、静息核心球+时间+光柱）+ 安好态空状态（有/无守望对象二分；抽屉复用现有 EventPanel）（SPEC-2.2 默认态, 2.2a 安好态；R3+R5/REV-022 授权） | M3-14, M3-15, M3-16 |
 
 后置（无 FM 行，§9 显式登记，非蒸发）：SPEC-8.5 AI 摘要（付费，阶段二前后）、时间滑块（SPEC-6.3 预留缓存窗口）、SPEC-5.8 T4 智能解析（付费）。
 非路线图流程 gate（orch 台账跟踪）：D2 营销、**D4 商标/重名检查（已前移为近期高优，备选名征集中）**、D5 用户验证、**D12 付费意愿最小验证（发布 gate）**、D16 阶段二触发、D19 license+CLA（详见 doc/product-decisions.md 各条修订）。
