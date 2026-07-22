@@ -109,9 +109,9 @@ test('list→marker：面板选中列表行使对应标记高亮态放大（SPEC
     return hit?.count ?? 0
   }
 
-  // 基线：未联动前的标记 dot 像素面积（分类实色，容差窄，天然与 AdditiveBlending 的脉冲光环
-  // 区分——RingGeometry(0.6,1) 中空半径始终大于未高亮 dot 半径，见本文件设计说明，
-  // 不会被光环像素混入计数）。
+  // 基线：未联动前的标记像素面积（分类实色，容差窄）。光柱标记切片①无独立环/脉冲层
+  // （DP M3-marker-pillar §3.2：rings InstancedMesh 已删；SPEC-3.7 常驻态无脉冲），
+  // 像素采样不受环带/脉冲相位干扰。
   // 标记经真实 dataLayer 链路（GDACS mock→store→GlobeScene.setEvents→渲染）**异步**上屏，
   // waitForSurfaceReady 只保底面材质就绪、不保标记已渲染；8-worker 高负载下该链路可能滞后于
   // 像素采样、令基线读到 0（BUG-010 负载稳健化）。此处轮询到 dot 像素可见为止（等渲染追上），
@@ -130,7 +130,8 @@ test('list→marker：面板选中列表行使对应标记高亮态放大（SPEC
   await waitNextFrame(page)
   await waitNextFrame(page)
 
-  // 联动高亮态下 dot 放大；跨脉冲光环若干相位采样取最大值，减少光环环带偶发遮挡的采样噪声
+  // 联动高亮态下光柱像素放大（DP §4.4 高亮=尺寸微升的静态强调，非动画）；多次采样取最大值，
+  // 规避渲染/合成时序偶发抖动的采样噪声（光柱切片①静止无脉冲，SPEC-3.7）
   const highlightedSamples: number[] = []
   for (let i = 0; i < 4; i++) {
     await resetIdleTimer(page)

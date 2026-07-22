@@ -1,6 +1,7 @@
 import * as THREE from 'three'
 import type { Category, GeoEvent } from '../data'
 import { latLonToVector3 } from './geo'
+import { pillarFragmentShader, pillarVertexShader } from './shaders/markers'
 
 /**
  * 六分类色表，逐字照 SPEC-3.7。唯一事实源：标记 instanceColor 与面板分类色圆点
@@ -47,61 +48,44 @@ export function severityCategoryCss(category: Category, severity: 1 | 2 | 3): st
   return '#' + deriveSeverityColor(_cssColor, category, severity).getHexString(THREE.SRGBColorSpace)
 }
 
-/** severity 基础尺寸（世界半径），随级别递增（SPEC-3.7）；具体数值属实现自由度。 */
-export const SEVERITY_BASE_SIZE: Record<1 | 2 | 3, number> = { 1: 0.012, 2: 0.017, 3: 0.023 }
+/** severity 柱高（世界半径 R=1，SPEC-3.7a pin 值）：sev1/sev2/sev3 = 0.05/0.09/0.15 R（比 1:1.8:3.0）。 */
+export const SEVERITY_PILLAR_HEIGHT: Record<1 | 2 | 3, number> = { 1: 0.05, 2: 0.09, 3: 0.15 }
 
-/** severity 脉冲光环幅度（相对基准张缩比例），随级别递增（SPEC-3.7）；具体数值属实现自由度。 */
-export const SEVERITY_PULSE_AMP: Record<1 | 2 | 3, number> = { 1: 0.2, 2: 0.45, 3: 0.8 }
-
-const MARKER_R = 1.02 // 标记落点半径：浮于底面(1.0)/海岸线(1.001)之上，在大气壳前方可见（SPEC-3.4）
-const RING_SCALE = 2.4 // 脉冲环相对标记基础尺寸的倍率（光环包住标记）
-const HIGHLIGHT_SCALE = 1.8 // 联动高亮：标记放大（中性信号，不引入新色彩语义，DP §2.4）
-const PULSE_PERIOD_MS = 1600 // 脉冲周期；按累加真实毫秒驱动，跨帧率等效（SPEC-7.5）
+const MARKER_R = 1.02 // 标记根落点半径：浮于底面(1.0)/海岸线(1.001)之上，在大气壳前方可见（SPEC-3.4）
+const PILLAR_BASE_RADIUS = 0.01 // 根半径 r0：等径、全 severity 恒定（SPEC-3.7a）
+const HIGHLIGHT_SCALE = 1.8 // 联动高亮：光柱加宽（中性强调，不改柱高以免与 severity 编码相混，DP §4.4）
 const FADE_DURATION_MS = 500 // 呼吸过渡时长：alpha 0↔1 全程用时；按真实毫秒推进，取值克制（D3 宁静，SPEC-3.11/7.5）
+const PICK_MARGIN = 0.02 // 拾取代理球相对半高的外扩量（覆盖柱身宽度与手感容差，DP §4.4）
 const INITIAL_CAPACITY = 256 // instancing 初始容量，超出翻倍扩容（SPEC-3.8）
 const RENDER_ORDER = 10 // 晚于大气壳绘制，保证标记不被大气遮挡（SPEC-3.4）
 
-// 标记点自定义 shader：per-instance 颜色 + 预留 per-instance 透明度通道（FM-09 呼吸过渡，DP §2.2）。
-// three 为 InstancedMesh 自动声明 instanceMatrix / instanceColor，此处仅补 instanceAlpha 与手工变换。
-const dotVertexShader = /* glsl */ `
-attribute float instanceAlpha;
-varying vec3 vColor;
-varying float vAlpha;
-void main() {
-  vColor = instanceColor;
-  vAlpha = instanceAlpha;
-  gl_Position = projectionMatrix * modelViewMatrix * instanceMatrix * vec4(position, 1.0);
-}
-`
-const dotFragmentShader = /* glsl */ `
-varying vec3 vColor;
-varying float vAlpha;
-void main() {
-  gl_FragColor = vec4(vColor, vAlpha);
-  #include <colorspace_fragment>
-}
-`
-
 // 复用的临时对象，避免每帧/每实例分配（单线程 JS 安全复用）
 const _pos = new THREE.Vector3()
-const _quat = new THREE.Quaternion()
+const _axis = new THREE.Vector3()
 const _identityQuat = new THREE.Quaternion()
 const _color = new THREE.Color()
 const _mat = new THREE.Matrix4()
 const _scale = new THREE.Vector3()
-const _normal = new THREE.Vector3()
-const RING_LOCAL_NORMAL = new THREE.Vector3(0, 0, 1) // RingGeometry 默认法线 +Z
+const _invWorld = new THREE.Matrix4()
+const _ray = new THREE.Ray()
+const _pickSphere = new THREE.Sphere()
+const _hit = new THREE.Vector3()
 
 export interface MarkerLayer {
   readonly object: THREE.Object3D
-  /** 全量事件 → 标记；按 id diff 增删改，不整表重建（SPEC-3.7/3.8；为 FM-09 呼吸预留 §2.2/2.4） */
+  /** 全量事件 → 标记；按 id diff 增删改，不整表重建（SPEC-3.7/3.8；呼吸增量登离场 SPEC-3.11） */
   setEvents(events: readonly GeoEvent[]): void
   /** 列表→标记：高亮某事件（null=清除）（SPEC-7.4） */
   setHighlight(id: string | null): void
   /** 标记→列表：raycaster 命中最近标记的事件 id，未命中 null（SPEC-7.4；仅高亮，不触发动作） */
   pick(raycaster: THREE.Raycaster): string | null
-  /** 脉冲动画推进（sev3 持续脉冲环，SPEC-3.7）；RAF 内每帧调用，elapsedMs 为帧间隔，内部累加（SPEC-7.5） */
+  /**
+   * 呼吸过渡推进（登场 alpha 0→1、离场 1→0）；RAF 内每帧调用，elapsedMs 为帧间隔（SPEC-3.11/7.5）。
+   * 无进行中的过渡时对 GPU 零写入——稳态两帧无差异（无脉冲/无持续动画，SPEC-3.11a）。
+   */
   tick(elapsedMs: number): void
+  /** reduced-motion 降级（SPEC-3.11a）：开启时增量呼吸瞬切（登离场瞬时完成）；默认 false */
+  setReducedMotion(enabled: boolean): void
   dispose(): void
 }
 
@@ -110,56 +94,44 @@ export function createMarkerLayer(): MarkerLayer {
 }
 
 /**
- * 事件标记 instancing 层：dots（分类色 + severity 基础尺寸 + 联动高亮 + 拾取目标）
- * 与 rings（脉冲光环，幅度随 severity 递增、sev3 持续脉冲）两层 InstancedMesh，
- * 共用一份 id→槽位映射；子节点数恒为 2、不随事件数增长（SPEC-3.8）。
+ * 事件标记 instancing 层：单个 InstancedMesh——径向站立的等径体积光柱（billboard 软四边面片）。
+ * 逐实例携根位置（instanceMatrix 平移列）/柱身分级色（instanceColor）/呼吸 alpha（instanceAlpha）；
+ * 子节点恒为 1、不随事件数增长（SPEC-3.7/3.7a/3.8）。柱高按 severity 分层（SPEC-3.7a），
+ * 常驻态全静止、无脉冲（SPEC-3.7）；呼吸仅用于增量登离场（SPEC-3.11），reduced-motion 下瞬切（SPEC-3.11a）。
  */
 class MarkerLayerImpl implements MarkerLayer {
   readonly object = new THREE.Group()
 
-  private readonly dotMaterial: THREE.ShaderMaterial
-  private readonly ringMaterial: THREE.MeshBasicMaterial
+  private readonly pillarMaterial: THREE.ShaderMaterial
 
-  private dots!: THREE.InstancedMesh
-  private rings!: THREE.InstancedMesh
-  private dotGeometry!: THREE.BufferGeometry
-  private ringGeometry!: THREE.BufferGeometry
-  private dotAlphaAttr!: THREE.InstancedBufferAttribute // dots 的 per-instance 透明度（呼吸过渡，SPEC-3.11）
+  private pillars!: THREE.InstancedMesh
+  private pillarGeometry!: THREE.BufferGeometry
+  private pillarAlphaAttr!: THREE.InstancedBufferAttribute // per-instance 呼吸透明度（SPEC-3.11 观测通道）
   private capacity = 0
 
   // 槽位状态（大小 = capacity）：severity=0 表示空槽
   private slotId: (string | null)[] = []
   private slotSeverity = new Uint8Array(0)
   private slotPos = new Float32Array(0)
-  private slotQuat = new Float32Array(0)
   private slotColor = new Float32Array(0)
   private slotAlpha = new Float32Array(0) // 逐槽当前透明度，tick 按真实毫秒推向 slotTarget（SPEC-3.11）
-  private slotTarget = new Uint8Array(0) // 逐槽目标透明度：1=活跃/淡入，0=淡出（到 0 释放）/空槽
+  private slotTarget = new Uint8Array(0) // 逐槽目标透明度：1=活跃/登场，0=离场（到 0 释放）/空槽
 
   private readonly indexOf = new Map<string, number>()
-  private readonly fadingId = new Map<string, number>() // 淡出中的 id→槽：尚未释放，供复活与容量核算
+  private readonly fadingId = new Map<string, number>() // 离场中的 id→槽：尚未释放，供复活与容量核算
   private readonly free: number[] = []
   private count = 0 // 高水位（= mesh.count 绘制数），空槽零缩放隐藏
   private highlightedId: string | null = null
-  private timeMs = 0
-  private hasPopulated = false // 首个非空快照即时上屏（冷启动缓存不淡入），此后新增才呼吸淡入（SPEC-3.11）
+  private hasPopulated = false // 首个非空快照即时上屏（冷启动缓存不淡入），此后新增才呼吸登场（SPEC-3.11）
+  private reducedMotion = false // OS reduced-motion：登离场瞬切、不走呼吸过渡（SPEC-3.11a）
 
   constructor() {
-    this.dotMaterial = new THREE.ShaderMaterial({
-      vertexShader: dotVertexShader,
-      fragmentShader: dotFragmentShader,
-      transparent: true, // 承载 per-instance alpha 通道；alpha 恒 1 时呈不透明
-      depthWrite: false, // 不写深度，避免小标记互相 z-fight；depthTest 仍开，球体正常遮挡背面标记
-    })
-    this.ringMaterial = new THREE.MeshBasicMaterial({
-      transparent: true,
-      opacity: 0.55,
-      depthWrite: false,
-      // 普通透明混合（BUG-022）：加色混合下密集区多环叠加会各通道累加饱和成白，
-      // 白不属 SPEC-3.7 分类色表，破坏「分类色为唯一色语义」。普通混合的叠加结果
-      // 收敛于该分类色本身、绝不越过其色域趋白；近黑球面背景下单环观感与加色几乎等同。
-      blending: THREE.NormalBlending,
-      side: THREE.DoubleSide,
+    this.pillarMaterial = new THREE.ShaderMaterial({
+      vertexShader: pillarVertexShader,
+      fragmentShader: pillarFragmentShader,
+      transparent: true, // 承载呼吸 alpha + 径向软边/尖端软消散；常规 alpha 混合（screen 归切片②）
+      depthWrite: false, // 不写深度避免柱间 z-fight；depthTest 仍开，球体遮住背面柱（SPEC-3.7a）
+      side: THREE.DoubleSide, // billboard 双面可见，免朝向翻转被剔除
     })
     this.buildMeshes(INITIAL_CAPACITY)
   }
@@ -168,35 +140,33 @@ class MarkerLayerImpl implements MarkerLayer {
     const incoming = new Set<string>()
     for (const e of events) incoming.add(e.id)
 
-    // 移除：现有 id 不在本次快照 → 转入淡出（保留渲染，tick 将 alpha 推向 0 后释放槽位），
-    // 不整表重建、不立即回收槽（SPEC-3.11「旧标记渐隐熄灭」/DP §2.2）
+    // 移除：现有 id 不在本次快照 → reduced-motion 立即熄灭释放；否则转入离场（tick 推 alpha→0 后释放），
+    // 不整表重建、不立即回收槽（SPEC-3.11「旧标记渐隐熄灭」；SPEC-3.11a 瞬切）
     for (const [id, i] of this.indexOf) {
       if (!incoming.has(id)) {
         this.indexOf.delete(id)
-        this.fadingId.set(id, i)
-        this.slotTarget[i] = 0
+        if (this.reducedMotion) {
+          this.releaseSlot(i) // 瞬切离场：直接熄灭释放（SPEC-3.11a）
+        } else {
+          this.fadingId.set(id, i)
+          this.slotTarget[i] = 0
+        }
       }
     }
-    // 扩容：活跃(events.length) + 淡出中(fadingId)槽仍各占一位，取上界确保容量足够（SPEC-3.8）
+    // 扩容：活跃(events.length) + 离场中(fadingId)槽仍各占一位，取上界确保容量足够（SPEC-3.8）
     this.ensureCapacity(events.length + this.fadingId.size)
     // 增/改：新增分配槽；已存在原地改写位置/severity/颜色（this.count 由分配时高水位维护）
     for (const e of events) this.upsertEvent(e)
 
-    this.dots.count = this.count
-    this.rings.count = this.count
-    this.dots.instanceMatrix.needsUpdate = true
-    this.rings.instanceMatrix.needsUpdate = true
-    this.dots.instanceColor!.needsUpdate = true
-    this.rings.instanceColor!.needsUpdate = true
-    this.dotAlphaAttr.needsUpdate = true // 新增/复活槽的 alpha 初值下发
-    // 使 dots 的包围球缓存失效（BUG-021）：three.js 的 InstancedMesh.raycast()/渲染器 sortObjects
-    // 均为「boundingSphere===null 才重算」的懒加载，不随 instanceMatrix/count 变化自动失效；
-    // 首帧 count=0 时会被渲染器抢先算出并缓存一个空球体，此后 pick() 恒命中该陈旧空球提前返回。
-    // 此处置 null（不在此处同步重算），下一次 raycast()/render 会按当前 instance 数据懒重算出正确球体，
-    // 覆盖首帧空球场景，也覆盖 ensureCapacity 扩容重建后 this.dots 已替换为新实例的场景（SPEC-7.4）。
-    this.dots.boundingSphere = null
+    this.pillars.count = this.count
+    this.pillars.instanceMatrix.needsUpdate = true
+    this.pillars.instanceColor!.needsUpdate = true
+    this.pillarAlphaAttr.needsUpdate = true // 新增/复活/瞬切槽的 alpha 下发
+    // 标记数据变更后置空包围球缓存（BUG-021）：本切片 pick 改为手动求交、不依赖它，但保留置空
+    // 以防未来回退几何 raycast，并避免渲染器 sort 读到 count=0 首帧缓存的陈旧空球（SPEC-7.4）。
+    this.pillars.boundingSphere = null
 
-    // 首个非空快照即视为已上屏：其后新增标记才呼吸淡入（冷启动缓存即时可见，SPEC-3.11）
+    // 首个非空快照即视为已上屏：其后新增标记才呼吸登场（冷启动缓存即时可见，SPEC-3.11）
     if (events.length > 0) this.hasPopulated = true
   }
 
@@ -204,93 +174,96 @@ class MarkerLayerImpl implements MarkerLayer {
     if (id === this.highlightedId) return
     const prev = this.highlightedId
     this.highlightedId = id
-    // 仅重算受影响的两个槽的 dot 矩阵（放大/复位），无需触碰其他实例
+    // 仅重算受影响的两个槽的光柱矩阵（加宽/复位），无需触碰其他实例
     for (const target of [prev, id]) {
       if (target === null) continue
       const i = this.indexOf.get(target)
-      if (i !== undefined) this.writeDotMatrix(i, this.dotSize(i))
+      if (i !== undefined) this.writePillarMatrix(i)
     }
-    this.dots.instanceMatrix.needsUpdate = true
+    this.pillars.instanceMatrix.needsUpdate = true
   }
 
   pick(raycaster: THREE.Raycaster): string | null {
-    const hits = raycaster.intersectObject(this.dots, false)
-    for (const h of hits) {
-      const idx = h.instanceId
-      // 空槽零缩放通常不命中；淡出中(target=0)标记虽仍在渐隐渲染，但已不属活跃集，不可拾取（SPEC-7.4）
-      if (idx == null || this.slotSeverity[idx] === 0 || this.slotTarget[idx] === 0) continue
-      return this.slotId[idx] ?? null
+    // billboard 细面不适合几何 raycast（DP §4.4）：将世界射线变换到标记模型空间，逐活跃光柱做
+    // 包围球（柱身中点、半径≈半高+容差）求交，取最近命中的事件 id（SPEC-7.4）。
+    this.object.updateWorldMatrix(true, false)
+    _invWorld.copy(this.object.matrixWorld).invert()
+    _ray.copy(raycaster.ray).applyMatrix4(_invWorld)
+    let bestId: string | null = null
+    let bestT = Infinity
+    for (let i = 0; i < this.count; i++) {
+      const sev = this.slotSeverity[i]
+      // 空槽 / 离场中(target=0，已不属活跃集)不可拾取（SPEC-7.4）
+      if (sev === 0 || this.slotTarget[i] === 0) continue
+      _pos.fromArray(this.slotPos, i * 3)
+      const h = SEVERITY_PILLAR_HEIGHT[sev as 1 | 2 | 3]
+      _axis.copy(_pos).normalize()
+      _pickSphere.center.copy(_pos).addScaledVector(_axis, h * 0.5) // 柱身中点
+      _pickSphere.radius = h * 0.5 + PICK_MARGIN
+      if (_ray.intersectSphere(_pickSphere, _hit) === null) continue
+      const t = _ray.origin.distanceToSquared(_hit)
+      if (t < bestT) {
+        bestT = t
+        bestId = this.slotId[i] ?? null
+      }
     }
-    return null
+    return bestId
   }
 
   tick(elapsedMs: number): void {
     const dt = Math.max(0, elapsedMs)
-    this.timeMs += dt
-    const pulse01 = 0.5 + 0.5 * Math.sin((this.timeMs / PULSE_PERIOD_MS) * Math.PI * 2)
-    // 呼吸过渡步长：按真实毫秒推进，跨帧率等效（SPEC-7.5 同款纪律）
-    const fadeStep = FADE_DURATION_MS > 0 ? dt / FADE_DURATION_MS : 1
+    // 呼吸过渡步长：按真实毫秒推进，跨帧率等效（SPEC-7.5）；reduced-motion 下步长=1 即瞬切（SPEC-3.11a）
+    const fadeStep = this.reducedMotion ? 1 : FADE_DURATION_MS > 0 ? dt / FADE_DURATION_MS : 1
     let alphaChanged = false
-    let dotMatrixChanged = false
+    let matrixChanged = false
     for (let i = 0; i < this.count; i++) {
       const sev = this.slotSeverity[i]
       if (sev === 0) continue
-      let alpha = this.slotAlpha[i]
       const target = this.slotTarget[i]
-      if (alpha !== target) {
-        // 逐槽把 alpha 线性推向目标：淡入(→1) / 淡出(→0)（SPEC-3.11 呼吸过渡）
-        alpha =
-          target > alpha ? Math.min(target, alpha + fadeStep) : Math.max(target, alpha - fadeStep)
-        this.slotAlpha[i] = alpha
-        this.dotAlphaAttr.setX(i, alpha)
-        alphaChanged = true
-        if (target === 0 && alpha === 0) {
-          // 淡出到 0 → 熄灭并释放槽位（SPEC-3.11 终态）；本帧不再写脉冲
-          this.releaseSlot(i)
-          dotMatrixChanged = true
-          continue
-        }
+      let alpha = this.slotAlpha[i]
+      if (alpha === target) continue // 稳态：无过渡则不写，GPU 零写入（SPEC-3.11a）
+      // 逐槽把 alpha 线性推向目标：登场(→1) / 离场(→0)（SPEC-3.11 呼吸过渡）
+      alpha = target > alpha ? Math.min(target, alpha + fadeStep) : Math.max(target, alpha - fadeStep)
+      this.slotAlpha[i] = alpha
+      this.pillarAlphaAttr.setX(i, alpha)
+      alphaChanged = true
+      if (target === 0 && alpha === 0) {
+        // 离场到 0 → 熄灭并释放槽位（SPEC-3.11 终态）
+        this.releaseSlot(i)
+        matrixChanged = true
       }
-      // 环尺寸按 severity 分层（sev1 无环 / sev2 静态 / sev3 脉冲），并乘 alpha 与 dot 一同呼吸
-      this.writeRingMatrix(i, this.ringSize(sev, alpha, pulse01))
     }
-    this.rings.instanceMatrix.needsUpdate = true
-    if (alphaChanged) this.dotAlphaAttr.needsUpdate = true
-    if (dotMatrixChanged) this.dots.instanceMatrix.needsUpdate = true
+    if (alphaChanged) this.pillarAlphaAttr.needsUpdate = true
+    if (matrixChanged) this.pillars.instanceMatrix.needsUpdate = true
+  }
+
+  setReducedMotion(enabled: boolean): void {
+    this.reducedMotion = enabled
   }
 
   dispose(): void {
-    this.object.remove(this.dots, this.rings)
-    this.dots.dispose()
-    this.rings.dispose()
-    this.dotGeometry.dispose()
-    this.ringGeometry.dispose()
-    this.dotMaterial.dispose()
-    this.ringMaterial.dispose()
+    this.object.remove(this.pillars)
+    this.pillars.dispose()
+    this.pillarGeometry.dispose()
+    this.pillarMaterial.dispose()
   }
 
   // ---- 内部 ----
 
   private buildMeshes(capacity: number): void {
-    this.dotGeometry = new THREE.SphereGeometry(1, 8, 8)
-    // 呼吸过渡透明度通道：默认 1（不透明）；DynamicDrawUsage 因 tick 每帧推进 alpha（SPEC-3.11/7.5）
-    this.dotAlphaAttr = new THREE.InstancedBufferAttribute(new Float32Array(capacity).fill(1), 1)
-    this.dotAlphaAttr.setUsage(THREE.DynamicDrawUsage)
-    this.dotGeometry.setAttribute('instanceAlpha', this.dotAlphaAttr)
-    this.dots = new THREE.InstancedMesh(this.dotGeometry, this.dotMaterial, capacity)
-    this.dots.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(capacity * 3), 3)
-
-    this.ringGeometry = new THREE.RingGeometry(0.6, 1, 20)
-    this.rings = new THREE.InstancedMesh(this.ringGeometry, this.ringMaterial, capacity)
-    this.rings.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(capacity * 3), 3)
-    this.rings.instanceMatrix.setUsage(THREE.DynamicDrawUsage) // ring 矩阵每帧更新
-
-    for (const mesh of [this.dots, this.rings]) {
-      mesh.frustumCulled = false // 实例散布全球，统一底面包围球会误剔除
-      mesh.renderOrder = RENDER_ORDER
-      mesh.count = this.count
-    }
-    this.object.add(this.dots, this.rings)
+    // billboard 用单位平面（XY 面），上移半格使柱高方向 y∈[0,1]（根在 y=0，向径向外延伸）
+    this.pillarGeometry = new THREE.PlaneGeometry(1, 1)
+    this.pillarGeometry.translate(0, 0.5, 0)
+    // 呼吸过渡透明度通道：默认 1（满态）；DynamicDrawUsage 因 tick 逐帧推进 alpha（SPEC-3.11/7.5）
+    this.pillarAlphaAttr = new THREE.InstancedBufferAttribute(new Float32Array(capacity).fill(1), 1)
+    this.pillarAlphaAttr.setUsage(THREE.DynamicDrawUsage)
+    this.pillarGeometry.setAttribute('instanceAlpha', this.pillarAlphaAttr)
+    this.pillars = new THREE.InstancedMesh(this.pillarGeometry, this.pillarMaterial, capacity)
+    this.pillars.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(capacity * 3), 3)
+    this.pillars.frustumCulled = false // 实例散布全球，统一底面包围球会误剔除
+    this.pillars.renderOrder = RENDER_ORDER
+    this.pillars.count = this.count
+    this.object.add(this.pillars) // 唯一子节点：children[0]（DP §3.1 观测契约 (a)）
     this.capacity = capacity
 
     // 扩容槽位状态数组并保留原值
@@ -302,8 +275,6 @@ class MarkerLayerImpl implements MarkerLayer {
     sev.set(this.slotSeverity)
     const pos = new Float32Array(capacity * 3)
     pos.set(this.slotPos)
-    const quat = new Float32Array(capacity * 4)
-    quat.set(this.slotQuat)
     const col = new Float32Array(capacity * 3)
     col.set(this.slotColor)
     const alpha = new Float32Array(capacity)
@@ -312,7 +283,6 @@ class MarkerLayerImpl implements MarkerLayer {
     target.set(this.slotTarget)
     this.slotSeverity = sev
     this.slotPos = pos
-    this.slotQuat = quat
     this.slotColor = col
     this.slotAlpha = alpha
     this.slotTarget = target
@@ -323,44 +293,33 @@ class MarkerLayerImpl implements MarkerLayer {
     if (n <= this.capacity) return
     let cap = this.capacity
     while (cap < n) cap *= 2
-    // 扩容：保留全部现存槽数据，重建更大的 instanced 网格（摊还，非逐更新重建，DP §2.2/4.2）
-    const oldDots = this.dots
-    const oldRings = this.rings
-    const oldDotGeo = this.dotGeometry
-    const oldRingGeo = this.ringGeometry
-    this.object.remove(oldDots, oldRings)
+    // 扩容：保留全部现存槽数据，重建更大的 instanced 网格（摊还，非逐更新重建）
+    const oldPillars = this.pillars
+    const oldGeo = this.pillarGeometry
+    this.object.remove(oldPillars)
 
-    this.buildMeshes(cap) // 置换 dots/rings/geometry/capacity，并扩容槽位数组
+    this.buildMeshes(cap) // 置换 pillars/geometry/capacity，并扩容槽位数组
     this.refillAllSlots() // 依 metadata 回写全部槽
 
-    oldDots.dispose() // 释放旧 instanceMatrix/instanceColor GPU 缓冲
-    oldRings.dispose()
-    oldDotGeo.dispose()
-    oldRingGeo.dispose()
+    oldPillars.dispose() // 释放旧 instanceMatrix/instanceColor GPU 缓冲
+    oldGeo.dispose()
   }
 
   private refillAllSlots(): void {
     for (let i = 0; i < this.count; i++) {
-      const sev = this.slotSeverity[i]
-      if (sev === 0) {
-        this.writeDotMatrix(i, 0)
-        this.writeRingMatrix(i, 0)
+      if (this.slotSeverity[i] === 0) {
+        this.writePillarMatrix(i)
         continue
       }
       _color.setRGB(this.slotColor[i * 3], this.slotColor[i * 3 + 1], this.slotColor[i * 3 + 2])
-      this.dots.setColorAt(i, _color)
-      this.rings.setColorAt(i, _color)
-      this.dotAlphaAttr.setX(i, this.slotAlpha[i]) // 保留呼吸过渡进度，扩容重建不打断（SPEC-3.11）
-      this.writeDotMatrix(i, this.dotSize(i))
-      this.writeRingMatrix(i, this.ringSize(sev, this.slotAlpha[i], 0))
+      this.pillars.setColorAt(i, _color)
+      this.pillarAlphaAttr.setX(i, this.slotAlpha[i]) // 保留呼吸过渡进度，扩容重建不打断（SPEC-3.11）
+      this.writePillarMatrix(i)
     }
-    this.dots.count = this.count
-    this.rings.count = this.count
-    this.dots.instanceMatrix.needsUpdate = true
-    this.rings.instanceMatrix.needsUpdate = true
-    this.dots.instanceColor!.needsUpdate = true
-    this.rings.instanceColor!.needsUpdate = true
-    this.dotAlphaAttr.needsUpdate = true
+    this.pillars.count = this.count
+    this.pillars.instanceMatrix.needsUpdate = true
+    this.pillars.instanceColor!.needsUpdate = true
+    this.pillarAlphaAttr.needsUpdate = true
   }
 
   private upsertEvent(e: GeoEvent): void {
@@ -368,46 +327,38 @@ class MarkerLayerImpl implements MarkerLayer {
     if (i === undefined) {
       const reviving = this.fadingId.get(e.id)
       if (reviving !== undefined) {
-        // 淡出中的同 id 重现：复活原槽，alpha 从当前值回升、不闪断（SPEC-3.11）
+        // 离场中的同 id 重现：复活原槽，alpha 从当前值回升、不闪断（SPEC-3.11）
         this.fadingId.delete(e.id)
         i = reviving
       } else {
         i = this.free.length > 0 ? this.free.pop()! : this.count++
-        // 冷启动缓存首屏即时可见（alpha=1）；已上屏后新增标记呼吸淡入（alpha 从 0 起，SPEC-3.11）
-        this.slotAlpha[i] = this.hasPopulated ? 0 : 1
+        // 首批 snap（冷启动缓存即时可见）或 reduced-motion 瞬切：alpha 直接满态；
+        // 已上屏后新增标记才呼吸登场（alpha 从 0 起，SPEC-3.11/3.11a）
+        this.slotAlpha[i] = this.hasPopulated && !this.reducedMotion ? 0 : 1
       }
       this.indexOf.set(e.id, i)
     }
-    this.slotTarget[i] = 1 // 目标不透明（新增淡入 / 复活回升 / 活跃保持）
+    this.slotTarget[i] = 1 // 目标满态（新增登场 / 复活回升 / 活跃保持）
     this.slotId[i] = e.id
     this.slotSeverity[i] = e.severity
 
-    // 位置（模型空间，随 markerRoot 自转并与晨昏线对齐，SPEC-6.2）
+    // 根位置（模型空间，随 markerRoot 自转并与晨昏线对齐，SPEC-6.2）
     const p = latLonToVector3(e.lat, e.lon, MARKER_R)
     this.slotPos[i * 3] = p.x
     this.slotPos[i * 3 + 1] = p.y
     this.slotPos[i * 3 + 2] = p.z
-    // 脉冲环径向朝外的朝向（贴合球面切平面）
-    _normal.copy(p).normalize()
-    _quat.setFromUnitVectors(RING_LOCAL_NORMAL, _normal)
-    this.slotQuat[i * 4] = _quat.x
-    this.slotQuat[i * 4 + 1] = _quat.y
-    this.slotQuat[i * 4 + 2] = _quat.z
-    this.slotQuat[i * 4 + 3] = _quat.w
     // severity 三通道分级色（SPEC-3.7 乘子规则；色相=分类不随 severity 变）
     deriveSeverityColor(_color, e.category, e.severity)
     this.slotColor[i * 3] = _color.r
     this.slotColor[i * 3 + 1] = _color.g
     this.slotColor[i * 3 + 2] = _color.b
-    this.dots.setColorAt(i, _color)
-    this.rings.setColorAt(i, _color)
-    this.dotAlphaAttr.setX(i, this.slotAlpha[i]) // 下发当前呼吸 alpha
+    this.pillars.setColorAt(i, _color)
+    this.pillarAlphaAttr.setX(i, this.slotAlpha[i]) // 下发当前呼吸 alpha
 
-    this.writeDotMatrix(i, this.dotSize(i)) // dot 尺寸与 alpha 无关：淡入淡出只调透明度不缩放
-    this.writeRingMatrix(i, this.ringSize(e.severity, this.slotAlpha[i], 0)) // 基准；sev3 tick 每帧覆盖脉冲
+    this.writePillarMatrix(i)
   }
 
-  /** 淡出到 0 后释放槽位：退出淡出登记、零缩放隐藏、回收槽供复用（SPEC-3.11「熄灭」终态） */
+  /** 离场到 0 后释放槽位：退出离场登记、零缩放隐藏、回收槽供复用（SPEC-3.11「熄灭」终态） */
   private releaseSlot(i: number): void {
     const id = this.slotId[i]
     if (id !== null) this.fadingId.delete(id)
@@ -416,39 +367,25 @@ class MarkerLayerImpl implements MarkerLayer {
     this.slotAlpha[i] = 0
     this.slotTarget[i] = 0
     this.free.push(i)
-    this.writeDotMatrix(i, 0) // 零缩放隐藏
-    this.writeRingMatrix(i, 0)
-  }
-
-  private dotSize(i: number): number {
-    const base = SEVERITY_BASE_SIZE[this.slotSeverity[i] as 1 | 2 | 3]
-    return this.slotId[i] === this.highlightedId ? base * HIGHLIGHT_SCALE : base
-  }
-
-  private ringBase(sev: number): number {
-    return SEVERITY_BASE_SIZE[sev as 1 | 2 | 3] * RING_SCALE
+    this.pillarAlphaAttr.setX(i, 0) // 熄灭：透明度归零（观测通道一致；needsUpdate 由调用方置位）
+    this.writePillarMatrix(i) // sev=0 → 零缩放隐藏
   }
 
   /**
-   * severity 分层的环尺寸（SPEC-3.7 发光通道）：sev1 无辉光（0）、sev2 静态柔光环（无脉冲）、
-   * sev3 持续脉冲环（pulse01 驱动，脉冲机制维持现状）。乘 alpha 与 dot 一同呼吸（SPEC-3.11）。
+   * 写光柱实例矩阵：平移=根位置（DP §3.1 不变式 (c)，e2e helper 依赖），
+   * 缩放 x/z=根半径 r0（联动高亮加宽）、y=柱高 H（SPEC-3.7a）；空/释放槽零缩放隐藏。
+   * billboard 顶点着色器按矩阵列长解出宽/高，故径向朝向无需 quat（由根位置在着色器内归一化派生）。
    */
-  private ringSize(sev: number, alpha: number, pulse01: number): number {
-    if (sev === 1) return 0
-    if (sev === 3) return this.ringBase(sev) * (1 + SEVERITY_PULSE_AMP[3] * pulse01) * alpha
-    return this.ringBase(sev) * alpha // sev2 静态柔光环
-  }
-
-  private writeDotMatrix(i: number, size: number): void {
+  private writePillarMatrix(i: number): void {
     _pos.fromArray(this.slotPos, i * 3)
-    _mat.compose(_pos, _identityQuat, _scale.setScalar(size))
-    this.dots.setMatrixAt(i, _mat)
-  }
-
-  private writeRingMatrix(i: number, size: number): void {
-    _pos.fromArray(this.slotPos, i * 3)
-    _quat.fromArray(this.slotQuat, i * 4)
-    _mat.compose(_pos, _quat, _scale.setScalar(size))
-    this.rings.setMatrixAt(i, _mat)
+    const sev = this.slotSeverity[i]
+    if (sev === 0) {
+      _scale.setScalar(0) // 空/释放槽：零缩放隐藏
+    } else {
+      const widen = this.slotId[i] === this.highlightedId ? HIGHLIGHT_SCALE : 1
+      _scale.set(PILLAR_BASE_RADIUS * widen, SEVERITY_PILLAR_HEIGHT[sev as 1 | 2 | 3], PILLAR_BASE_RADIUS * widen)
+    }
+    _mat.compose(_pos, _identityQuat, _scale)
+    this.pillars.setMatrixAt(i, _mat)
   }
 }

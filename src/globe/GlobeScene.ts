@@ -57,6 +57,9 @@ export class GlobeScene {
   private pointerDirty = false
   private lastHoveredId: string | null = null
 
+  // reduced-motion 偏好监听（SPEC-3.11a）：透传标记层切呼吸瞬切/坡升
+  private reducedMotionQuery?: MediaQueryList
+
   constructor(container: HTMLElement, options: GlobeSceneOptions = {}) {
     this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true })
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
@@ -75,6 +78,15 @@ export class GlobeScene {
     // 事件标记层：挂进 markerRoot，随自转与晨昏线一并转动、天然对齐地理（SPEC-6.2/3.7/3.8）
     this.markerLayer = createMarkerLayer()
     earthGroup.add(this.markerLayer.object)
+
+    // reduced-motion 接线（SPEC-3.11a，DP §3.5）：按 OS 偏好初始化并监听运行时变更；
+    // 非浏览器环境（matchMedia 缺失）跳过——标记层默认 false（坡升）
+    const mql = window.matchMedia?.('(prefers-reduced-motion: reduce)')
+    if (mql) {
+      this.markerLayer.setReducedMotion(mql.matches)
+      mql.addEventListener('change', this.onReducedMotionChange)
+      this.reducedMotionQuery = mql
+    }
 
     if (options.satellite) {
       // 卫星昼夜底图：非默认，仅 DEV/测试经 ?style=satellite 显式启用（BUG-020 方案 a）。
@@ -125,7 +137,7 @@ export class GlobeScene {
       // 空闲自转作用于地球本体，相机与星空不动（SPEC-7.3 / SPEC-3.5）
       earthGroup.rotation.y += spinDeltaRad
       this.updateSunDir()
-      // 脉冲动画按真实帧间隔累加推进，跨帧率等效（SPEC-3.7/7.5）
+      // 呼吸过渡按真实帧间隔推进，跨帧率等效；稳态无过渡时零写入（SPEC-3.11/3.11a/7.5）
       const nowMs = performance.now()
       this.markerLayer.tick(this.lastFrameMs === 0 ? 0 : nowMs - this.lastFrameMs)
       this.lastFrameMs = nowMs
@@ -186,6 +198,11 @@ export class GlobeScene {
     }
   }
 
+  /** OS reduced-motion 偏好运行时变更 → 透传标记层（SPEC-3.11a） */
+  private onReducedMotionChange = (e: MediaQueryListEvent) => {
+    this.markerLayer.setReducedMotion(e.matches)
+  }
+
   /** 命中标记 id 变化时上抛（去抖，避免每帧 setState，DP §3.4）；无回调则跳过求交省算力 */
   private updateHover() {
     if (this.onMarkerHover === undefined || !this.pointerDirty) return
@@ -233,9 +250,10 @@ export class GlobeScene {
     this.controls.dispose()
     this.renderer.domElement.removeEventListener('pointermove', this.onHoverMove)
     this.renderer.domElement.removeEventListener('pointerleave', this.onHoverLeave)
+    this.reducedMotionQuery?.removeEventListener('change', this.onReducedMotionChange)
 
-    // 标记层先 dispose（从 markerRoot 摘除自身两个 InstancedMesh 并释放 GPU 缓冲），
-    // 故下方 traverse 不会再触及它们
+    // 标记层先 dispose（从 markerRoot 摘除自身 InstancedMesh 并释放 GPU 缓冲），
+    // 故下方 traverse 不会再触及它
     this.markerLayer.dispose()
     // 矢量地表的 LineSegments（海岸线/网格）不是 Mesh/Points，traverse 不覆盖，须显式释放
     this.surface.dispose?.()

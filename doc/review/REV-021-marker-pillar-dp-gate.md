@@ -106,3 +106,37 @@ LOD 档切换是**相机驱动、底层事件数据未变**的显示集变更，
 - **G-1（本记录 §3.3，须 arch 整改①）**：DP §3.1 兼容面「保持不变」承诺对 M2-21 不足——遗漏「光柱 instanceMatrix 平移=根位置」不变式，且与 §3.4 打包自由度矛盾；不整改则 dev 依残缺契约实现、M2-21 切片①收尾失败返工。非 src 缺陷、无需登 bugs.md，随 DP 整改重审闭环。
 - 给 qa 的重推提示（整改②③）：M2-11 逐切片钉精确子节点数、panel-marker-linkage 纳入复跑清单——待 DP 通过后由 orch 随动效批 qa 派单落实。
 - 无 src/tests 代码缺陷发现；BUG-031 维持 OPEN，按 DP §7 与 BUG-031 条目由 dev 三切片落地后 qa 机械关单（关单人≠修复人）。
+
+---
+
+## 附录：整改重审（2026-07-22）
+
+- 触发：本记录 §6 判「打回（整改后重审）」，口径明列「整改①落定后重审仅核该项与四附带订正即可放行」。
+- 重审对象：arch 按本记录整改后的 `doc/design-prompt/M3-marker-pillar.md`。
+- 核对方式：自行 Read/Grep `e2e/globeDebug.ts`、`src/globe/markers.ts`、`doc/testplan.md` 真实代码，不采信任何转述。
+
+### A. 必核（阻塞项整改①）——通过
+
+**A-1 §3.1 (c) 不变式已补，且与真实读法一致。** DP §3.1（line 88–93）观测契约由二条扩为三条，新增 (c)「承载呼吸的光柱 InstancedMesh 逐实例 instanceMatrix 平移分量必须等于标记根位置 `latLonToVector3(lat,lon,MARKER_R)`（矩阵元素 `[12][13][14]`）」。逐条比对 `e2e/globeDebug.ts` 真实代码：
+- `sampleMarkerInstances`（526–557）：定位 `markerGroup.children[0]`（=(a)），读 `geometry.attributes.instanceAlpha.array`（=(b)），读 `mat[i*16+12/13/14]` 作 tx/ty/tz（=(c)）——三条依赖全部命中。
+- `injectAndRecordBreathing.alphaAt`（605–630）：同取 `group.children[0]`（=(a)）、`instanceAlpha`（=(b)）；关键处 `len=Math.hypot(tx,ty,tz); if(len<1e-6) continue; dot=(tx·dx+ty·dy+tz·dz)/len` 靠 instanceMatrix 平移**方向**识别标记，初值 `bestAlpha=Number.NaN`（=(c) 且 DP 所述失败机理属实：instanceMatrix 退化为单位阵 → 全 `continue` → 返回 NaN → M2-21 断言失败）。
+- DP §3.1 对失败机理的陈述（「读回平移全 0…因 `len<1e-6` 跳过全部实例返回 NaN」）与代码逐字吻合，非臆测。
+- 引用符号真实存在且不变式描述的是现存行为：`src/globe/markers.ts` line 3 `import { latLonToVector3 }`、line 56 `MARKER_R=1.02`、line 386 `latLonToVector3(e.lat,e.lon,MARKER_R)` 写入槽位并经 shader（line 73）`instanceMatrix*vec4(position,1.0)` 落地——现 dots 即把根位置写进 instanceMatrix 平移，故 (c) 是「保住现有可复跑性」的约束、可满足，非新造。**通过**。
+
+**A-2 §3.4 打包自由度已相应收窄，与 §3.1 无残留矛盾。** DP §3.4（line 113–116）新增「打包自由度的边界（承 §3.1 不变式 (c)，收窄）」：明写「根部位置**必须**写入 instanceMatrix 平移分量 `[12][13][14]`，不得只存自定义属性、令 instanceMatrix 退化为单位阵」，billboard 下仅径向轴/朝向/柱高可另走自定义属性。该表述与 §3.1 (c) 一致，消除本记录 §3.3 指出的「§3.1 隐含要求 vs §3.4 放开」自相矛盾。旁证无新矛盾：§4.1（line 128/131）billboard 提示只言「逐实例携根位置+径向轴」「柱为 children[0]」，未主张单位阵或根位置入自定义属性；与 §3.1/§3.4 自洽。**通过**。
+
+**A-3 helper 误称已订正。** Grep `sampleMarkerAlphas` 于 DP 命中数 = 0；§3.1 line 91 现为 `globeDebug.sampleMarkerInstances`/`injectAndRecordBreathing`（实名，并列两个 helper），与本记录 §6 附带订正一致。**通过**。
+
+### B. 抽查（非阻塞②③④ + 裁决对齐）——均已落实，无新增对外取值/pin 冲突
+
+- **整改②（M2-11 逐切片精确子节点数）**：DP §3.2（line 102）由「小常数」细化为「逐切片钉精确子节点数（切片①=1；切片②/③=2）+ 不随事件数增长 + 各 InstancedMesh.count==展示标记数」，守 §5.2 判据不软化。§2.7（line 65–66）、§5.2「确认不受影响」段（line 174）措辞同步。落实。
+- **整改③（§5.2 M2-14 复跑登记）**：DP §5.2 新增「复跑确认」段（line 176），显式列 M2-14（`panel-marker-linkage.spec.ts`，SPEC-7.4），要求柱几何改 billboard/锥后复跑联动冒烟、拾取不稳走 §4.4 代理选项——不再仅落 §4.4 陷阱段。testplan line 38 核实 M2-14 确为 panel-marker-linkage，编号无误。落实。
+- **整改④（§2.7 二 mesh 措辞）**：DP §2.7（line 66）改为「每个 InstancedMesh 一次 draw call 承载其全部展示实例（现为柱+足印二 mesh 结构，见 §3.2/§4.1），draw call 数为小常数」，去除原「单 InstancedMesh 承载全部展示标记」与二 mesh 结构字面冲突的措辞。落实。
+- **裁决对齐（两项读法）**：DP §7（line 196–198）由「待确认项」改为确定性陈述——「已经 REV-021 §5 门禁确认，dev 按此实现，不再是待确认项」，(1) LOD 瞬切「REV-021 裁定成立」、(2) 常量「REV-021 裁定改名 `SEVERITY_PILLAR_HEIGHT`」，均引本记录 §5；§4.3（line 142）亦同步为「已经 REV-021 §5 裁定成立」。与本记录 §5 裁决一致。落实。
+- **新对外取值 / spec pin 冲突核查**：整改仅触 §3.1/§3.4（instanceMatrix 打包，实现私有）、§3.2（子节点数，结构）、§2.7（draw call 措辞）、§7/§4.3（裁决状态）。无一处引入 spec 之外对外可见取值：`MARKER_R`/instanceMatrix 元素索引均为实现私有约束（非 SPEC-3.7a 形态取值）；`SEVERITY_PILLAR_HEIGHT{0.05,0.09,0.15}` 为 SPEC-3.7a 已 pin 柱高（本记录 §1/§5 已核）。SPEC-3.7a/3.7c/3.11/3.11a 的 pin 值未被触碰、无抄改。无行为泄漏、无 pin 冲突。
+
+### 判定：放行
+
+阻塞项整改①（A-1/A-2/A-3）三点全部落定且与 `e2e/globeDebug.ts` 真实读法逐条吻合；四附带订正与两项读法裁决均已按本记录 §5/§6 落为确定性陈述；抽查未发现新增对外取值或 spec pin 冲突。本 DP 兼容面缺陷 G-1 已闭合，行为泄漏零、spec 一致、极简、切片可验证四项在本记录 §1–§4 已通过且整改未触动。**门禁放行，orch 可据此 DP 派 dev 落地三切片。** G-1 随本重审闭环，无遗留阻塞项；本记录 §7 给 qa 的重推提示（整改②③已入 DP，待 DP 派单时随动效批 qa 落实）维持有效。
+
+—— REV，2026-07-22
