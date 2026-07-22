@@ -3,7 +3,8 @@ import { expect, test } from '@playwright/test'
 // M2-18：顶栏品牌名与 UTC 时钟（e2e）。
 // 期望值出处（断言期望值只从 doc/spec.md 推导，逐条标注 SPEC 条目）：
 //   - SPEC-2.1「顶栏（48px）：品牌名『Worlens』（M2）… UTC 时钟（M2，实时刷新，格式 HH:MM:SS UTC）」。
-// 加密行情 ticker 属 M3（SPEC-2.1 + SPEC-5.7），不入本场景判据。
+// 顶栏永不含加密行情 ticker：SPEC-2.1 现文仅「品牌名 + UTC 时钟」，ticker 已处死
+// （原 SPEC-5.7 整条删除，见 §9 市场/公司信号后置候选注记 + product-vision 论纲六「地理是唯一的语法」）。
 // 说明：class 选择器仅用于「定位」顶栏元素（读 src/App.tsx 导出结构做对接），
 // 不把实现取值当期望——文本「Worlens」、高度 48、时钟格式均从 SPEC-2.1 推导。
 
@@ -62,8 +63,9 @@ test('UTC 时钟实时刷新——间隔 >1s 两次采样取值不同（SPEC-2.1
   expect(t2).not.toBe(t1) // 两次取值不同，证明随真实时间推进而非静态占位文本
 })
 
-// BUG-026 复验：加密行情 ticker 属 M3（SPEC-2.1「加密行情 ticker（M3，SPEC-5.7）」），
-// 顶栏当前不应渲染该占位文本——期望值即「不含」，非对占位符禁用态展示的容忍。
+// BUG-026 复验：加密行情 ticker 已删除（SPEC-2.1 现为「顶栏无 ticker」+ §9 市场/公司信号
+// 后置候选注记/product-vision 论纲六），顶栏永不应渲染该占位文本——期望值即「不含」，
+// 非对占位符禁用态展示的容忍。
 test('顶栏不含行情 ticker 占位文本（SPEC-2.1，BUG-026）', async ({ page }) => {
   await page.goto('/')
   const topbar = page.locator('.topbar')
