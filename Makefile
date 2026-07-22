@@ -1,11 +1,14 @@
 # 薄转发层：真正逻辑在 npm scripts 与 scripts/*.py（GNU make 3.81 兼容，只用基础语法）
-.PHONY: dev build test e2e lint regress handover next docs-check docs-archive pin-spec bump evidence
+.PHONY: dev build preview test e2e lint regress handover next docs-check docs-archive pin-spec bump evidence
 
 dev:
 	npm run dev
 
 build:
 	npm run build
+
+preview: build
+	npm run preview
 
 test:
 	node scripts/regress.mjs --unit "$(TEST)"

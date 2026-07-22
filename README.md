@@ -25,7 +25,8 @@
 git config core.hooksPath .githooks   # 首次克隆后（启用 docs-check 软门禁）
 npm install && npx playwright install chromium
 make handover                          # 当前状态一览
-make dev                               # 起 dev server
+make dev                               # 起 dev server（热更新，开发用）
+make preview                           # 构建生产产物并本地预览（vite build + preview）
 make regress                           # 全量回归（lint + 单测 + e2e）
 ```
 
