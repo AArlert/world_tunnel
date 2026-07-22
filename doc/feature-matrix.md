@@ -20,11 +20,11 @@
 | FM-12 | M3 | 扩展信源 | providers/（GDELT；SPEC-5.4；SPEC-5.10：GDELT 归「新闻报道（待验证）」，分级由 `source` 经表派生，provider 不加字段。**CoinGecko 行情 ticker 已删除（R2/D31，原 SPEC-5.7 处死）；OpenSky 航班图层（SPEC-5.6）与 SPEC-6.3① flight-60s 已移出 M3、改挂 M6 FM-27——REV-016/BUG-017 裁定原生端专属**） | （M3 开卡登记） |
 | FM-13 | M3 | 解析分层 T2/T2.5/T3 | src/data/geo/（gazetteer 查表 + 关键词规则 + GDELT 编码采用；SPEC-5.8, 5.4；注：SPEC-5.10 信任分级为独立于本行 SPEC-5.8 T1–T4 的正交轴，二者不得互相推导，避免与解析分层混同） | （M3 开卡登记） |
 | FM-14 | M3 | 详情卡 + 搜索 | src/ui/ 详情卡 + 缓存/地名搜索（SPEC-2.3, 2.5；SPEC-7.4 点击飞行+详情卡分片；SPEC-2.3 改写 + SPEC-5.10：信源名/等级、`urls` 计数去重呈现、轻量纠错反馈入口） | （M3 开卡登记） |
-| FM-15 | M3 | 首启引导 + 开屏锚定 | src/ui/ 引导（垂类分流 + 粗粒度地理关注）+ src/globe/ 锚定视角（SPEC-8.6, 3.1） | （M3 开卡登记） |
-| FM-16 | M4 | 高级个性化 | watchlist（地点/关键词）+ 过滤模式 + 持久化（SPEC-8.1, 8.2, 8.4） | （M4 开卡登记） |
+| FM-15 | M3 | 首启引导 + 开屏锚定 | src/ui/ 引导（**守望第一问「你守望哪里/牵挂谁」采集地方/人/主题 + 次级垂类分流**）+ src/globe/ 锚定视角（**SPEC-8.6 重铸（R7/REV-020）**, 3.1） | M3-13 |
+| FM-16 | M4 | 守望精化 | **精细圆域（中心+半径 km）+ 复杂过滤/多守望条目组合 + inline 命中强调（aes 付税 → arch 落 SPEC-8.2，REV-020 遗留义务 2）+ 守望持久化完整化（建于 M3 FM-28 守望最小闭环之上；SPEC-8.1 精化, 8.2 完整过滤, 8.4）** | （M4 开卡登记） |
 | FM-17 | M4 | 事件保留 | 收藏永久保存 + 过期窗 48–72h 可配（SPEC-6.3, 8.4） | （M4 开卡登记） |
 | FM-18 | M4 | 风格商店 + 支付 | 风格包懒加载切换 + 许可码本地校验 + 设置入口（SPEC-3.9, 8.8 许可码, 2.4②③） | （M4 开卡登记） |
-| FM-19 | M4 | 通知（Web） | Web Notification，watchlist 命中（SPEC-8.3） | （M4 开卡登记） |
+| FM-19 | M4 | 通知（Web） | Web Notification，守望命中（SPEC-8.3；概念词 R7/REV-020 F-2） | （M4 开卡登记） |
 | FM-20 | M5 | PWA 升格 | manifest + service worker + 离线壳 + 缓存闭环（SPEC-3.11, 5.9 web 子集） | （M5 开卡登记） |
 | FM-21 | M5 | 性能达标 + 合规收口 | 性能验收 + API 条款核查汇总签核（SPEC-3.10 达标, 5.9；SPEC-7.5 变频回归 R-9） | （M5 开卡登记） |
 | FM-22 | M5 | 匿名遥测 | src/telemetry/ 心跳 + 低配服务器 + 关闭入口（SPEC-8.7） | （M5 开卡登记） |
@@ -33,6 +33,7 @@
 | FM-25 | M6 | 自定义 RSS（原生） | 原生 feed 请求 + 内容展示 feed 自带为限（SPEC-5.9 原生全集, 5.8-T4 钉图；SPEC-5.10：RSS 信源默认归「新闻报道（待验证）」，显示名取 feed 标题，前向兼容） | （M6 开卡登记） |
 | FM-26 | M6 | 原生通知 | Capacitor Local Notifications（SPEC-8.3 换端） | （M6 开卡登记） |
 | FM-27 | M6 | 原生端航班图层 | providers/ OpenSky（原生请求不受 CORS 限制）+ 航班图层开关（SPEC-5.6 原生端专属；承接 SPEC-6.3① flight-60s；REV-016/BUG-017 从 M3 FM-12 改挂） | （M6 开卡登记，qa 核对 flight-60s 场景 BUG-016） |
+| FM-28 | M3 | 守望最小闭环 | src/data/ 守望匹配 + src/store/ 守望对象本地存 + src/ui/ 过滤模式（地方/人/主题守望 → 命中 → 隔离式呈现 + 仅守望命中过滤；SPEC-8.1 M3 最小形态, 8.2 仅命中模式, 8.6 引导采集；R7/REV-020 授权，DEV 开卡前 arch 出 design-prompt——REV-020 遗留义务 1） | M3-11, M3-12 |
 
 后置（无 FM 行，§9 显式登记，非蒸发）：SPEC-8.5 AI 摘要（付费，阶段二前后）、时间滑块（SPEC-6.3 预留缓存窗口）、SPEC-5.8 T4 智能解析（付费）。
 非路线图流程 gate（orch 台账跟踪）：D2 营销、**D4 商标/重名检查（已前移为近期高优，备选名征集中）**、D5 用户验证、**D12 付费意愿最小验证（发布 gate）**、D16 阶段二触发、D19 license+CLA（详见 doc/product-decisions.md 各条修订）。
