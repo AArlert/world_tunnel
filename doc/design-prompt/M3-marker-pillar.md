@@ -63,7 +63,7 @@
 
 ### 2.7 性能与结构（SPEC-3.8 / SPEC-3.10）
 - ≥200 标记走 instancing，不逐事件建 Mesh；场景图渲染对象数为**小常数、不随事件数线性增长**（SPEC-3.8，M2-11 结构判据不回退）。
-- 单 InstancedMesh 一次 draw call 承载全部展示标记；实例属性只在变化时上传（呼吸 alpha 仅在过渡进行中逐帧上传，settled 后停）。
+- 标记走 instancing：每个 InstancedMesh 一次 draw call 承载其全部展示实例（现为柱+足印二 mesh 结构，见 §3.2/§4.1），draw call 数为小常数、不逐事件建 Mesh；实例属性只在变化时上传（呼吸 alpha 仅在过渡进行中逐帧上传，settled 后停）。
 
 ---
 
@@ -85,7 +85,12 @@
 | `severityCategoryCss` | `(category, severity) => string` | EventPanel / M3-01 | SPEC-2.2a / 3.7 |
 | **`instanceAlpha` 逐实例属性** | 承载呼吸 alpha 的 GPU 侧观测通道 | M2-21 / M2-25 / globeDebug | SPEC-3.11 |
 
-**instanceAlpha 观测契约（test-compat，须严守）**：呼吸 alpha 必须继续以名为 `instanceAlpha` 的 per-instance float 属性承载，且挂在光柱（承载呼吸的）InstancedMesh 上；该光柱 mesh 须为 `layer.object`（Group）的**第一个子节点**（`children[0]`）。M2-25 单测按「携带 instanceAlpha 属性的子节点」定位（对顺序稳健），但 e2e helper `globeDebug.sampleMarkerAlphas`/breathing trace 按「Group 首个子节点」定位——保住此二者，M2-21/M2-25 无需改 helper 即可复跑。
+**instanceAlpha 观测契约（test-compat，须严守）**：M2-21/M2-25 复跑依赖承载呼吸的光柱 InstancedMesh 同时满足三条不变式——
+(a) 该 mesh 须为 `layer.object`（Group）的**第一个子节点**（`children[0]`）；
+(b) 该 mesh 携名为 `instanceAlpha` 的 per-instance float 属性，承载呼吸 alpha；
+(c) **该 mesh 的逐实例 instanceMatrix 平移分量必须等于标记根位置 `latLonToVector3(lat,lon,MARKER_R)`**（即矩阵元素 `[12][13][14]`）——e2e helper `globeDebug.sampleMarkerInstances`/`injectAndRecordBreathing` 均按 instanceMatrix 平移方向识别标记实例（非按自定义属性读取），(c) 是二者无需改 helper 即可复跑的前提；若根位置只存自定义属性而令 instanceMatrix 退化为单位阵，`sampleMarkerInstances` 读回平移全 0、`injectAndRecordBreathing` 的 `alphaAt` 因 `len<1e-6` 跳过全部实例返回 NaN，M2-21 断言直接失败。
+
+M2-25 单测按「携带 instanceAlpha 属性的子节点」定位（对顺序稳健，只依赖 (a)(b)）。三条不变式共同保住 M2-21/M2-25 无需改 helper 即可复跑；(c) 相应收窄 §3.4 逐实例数据打包自由度（见该节）。
 
 ### 3.2 必须变更 / 删除（qa 须据此调整测试）
 
@@ -94,7 +99,7 @@
 | `SEVERITY_PULSE_AMP` | **删除**（脉冲语义已删） | M2-10 单测删「PULSE_AMP 递增」断言 | SPEC-3.7 删脉冲 |
 | `SEVERITY_BASE_SIZE`（球基础尺寸） | **改名并重定义**为 `SEVERITY_PILLAR_HEIGHT: Record<1\|2\|3, number> = {1:0.05, 2:0.09, 3:0.15}`（柱高，R=1） | M2-10 单测改引用；值现为 SPEC-3.7a pin（非实现自由度），可断严格递增或精确值 | SPEC-3.7a |
 | `rings` InstancedMesh 子节点 | **删除**（辉光改 shader 内梯度实现，不再有独立环 mesh） | M3-03 发光段 + `globeDebug.sampleMarkerRings` 须 qa 重写为像素法 | SPEC-3.7 / 3.7a |
-| `layer.object` 子节点数 | 由 2（dots+rings）→ 切片①后 1（柱）→ 切片②补足印后 2（柱+足印）；**永为小常数、不随事件数增长** | M2-11 判据由「恒为 2」重推为「小常数、不随事件数增长；各 InstancedMesh.count == 展示标记数」 | SPEC-3.8 |
+| `layer.object` 子节点数 | 由 2（dots+rings）→ 切片①后 1（柱）→ 切片②补足印后 2（柱+足印）；**永为小常数、不随事件数增长** | M2-11 判据由「恒为 2」重推为**逐切片钉精确子节点数**（切片①=1；切片②/③=2）+ 不随事件数增长 + 各 InstancedMesh.count == 展示标记数 | SPEC-3.8 |
 
 ### 3.3 新增接口（向后兼容，既有调用方不受影响）
 
@@ -106,7 +111,9 @@
 > 为何 LOD 用独立方法而非扩 `tick`：保 `tick(elapsedMs)` 单参签名不变，M2-21/M2-25 直接复跑。`setCameraDistance` 每帧由 GlobeScene 调（cheap），内部只在档界穿越时重算聚合，非每帧重聚合。
 
 ### 3.4 逐实例数据契约（实现私有，dev 自行打包）
-一根光柱实例须携带：根部位置（模型空间，`latLonToVector3(lat,lon,MARKER_R)`）、径向轴（由位置归一化派生）、柱高（=severity→`SEVERITY_PILLAR_HEIGHT`）、柱身 pin 基色（`deriveSeverityColor`，即现 `instanceColor`）、呼吸 alpha（`instanceAlpha`）、新鲜度 `F`（SPEC-3.7b，静态固化）、以及能判白热核档位的 severity。LOD 当前档为**全体一致**，宜作 material uniform（非逐实例）。具体属性布局/打包属自由度。
+一根光柱实例须携带：根部位置（模型空间，`latLonToVector3(lat,lon,MARKER_R)`）、径向轴（由位置归一化派生）、柱高（=severity→`SEVERITY_PILLAR_HEIGHT`）、柱身 pin 基色（`deriveSeverityColor`，即现 `instanceColor`）、呼吸 alpha（`instanceAlpha`）、新鲜度 `F`（SPEC-3.7b，静态固化）、以及能判白热核档位的 severity。LOD 当前档为**全体一致**，宜作 material uniform（非逐实例）。
+
+**打包自由度的边界（承 §3.1 不变式 (c)，收窄）**：根部位置**必须**写入 instanceMatrix 的平移分量（矩阵元素 `[12][13][14]`），不得只存自定义属性、令 instanceMatrix 退化为单位阵——billboard 方案（§4.1 推荐 A）下径向轴/朝向/柱高等可另走自定义属性，但根位置这一分量不可绕开 instanceMatrix，因 e2e helper 靠该分量识别标记实例（§3.1）。除该项外，具体属性布局/打包细节仍属自由度。
 
 ### 3.5 GlobeScene 接线变更（dev 一并改 `src/globe/GlobeScene.ts`）
 - animate 循环加 `this.markerLayer.setCameraDistance(this.camera.position.length())`（球心在原点，相机距 = 位置模长）。
@@ -132,7 +139,7 @@
 - **事实源** = `setEvents` 存下的全量事件；**展示集** = 按当前档 θ 对全量做大圆角距聚合后的**代表柱集**。
 - 聚合仅依赖（事件集，档 θ）；档只依赖 `d`。故重算触发点仅两处：`setEvents`（数据变）、`setCameraDistance` 且**档发生切换**。`setCameraDistance` 每帧调但档未变则 no-op（无每帧重聚合）。
 - 代表柱按 SPEC-3.7c 选（max severity，平手取最新）；簇的稳定 key 建议取代表事件 id，便于展示集 diff。
-- **呼吸 vs LOD 的正交**：呼吸（`instanceAlpha`）只服务**数据增量**（`setEvents` 的 id diff，SPEC-3.11）；**相机档切换导致的代表柱增减直接落展示集、不走呼吸淡入淡出**——相机驱动不施动画（SPEC-3.11a「无相机驱动微闪」+ D27「呼吸只用于增量」）。见 §6 待 rev 确认读法 (1)。
+- **呼吸 vs LOD 的正交**：呼吸（`instanceAlpha`）只服务**数据增量**（`setEvents` 的 id diff，SPEC-3.11）；**相机档切换导致的代表柱增减直接落展示集、不走呼吸淡入淡出**——相机驱动不施动画（SPEC-3.11a「无相机驱动微闪」+ D27「呼吸只用于增量」）；该读法已经 REV-021 §5 裁定成立（见 §7）。
 - `pick`/`setHighlight` 作用于展示的代表柱：`pick` 返回代表事件 id；`setHighlight(id)` 若 id 被聚为非代表成员，最小处理为高亮其所在簇的代表柱或 no-op（SPEC-7.4 未规定被聚成员的高亮，极简即可，自由度）。
 
 ### 4.4 已知陷阱
@@ -164,7 +171,9 @@
 - reduced-motion（`setReducedMotion(true)`）：增量呼吸瞬切、稳态全静、无隐藏动画（SPEC-3.11a）。
 - 质量量测（量测方法 qa 定，比照 SPEC-3.10）：最亮像素 Y≤220 无纯白 255、screen 混合、临边柱×halo 无脏白（SPEC-3.7a）。
 
-**确认不受影响（不回退）**：M2-21（呼吸收敛过程，依 SPEC-3.11 + instanceAlpha 通道，3.1 兼容面守住即复跑）、M2-25（首批 snap 对照，同上）、M3-01（列表行镜像球面 severity，依 SPEC-3.7 分级值未动）、M2-11（结构判据按 3.2 重推为「小常数」）。
+**确认不受影响（不回退）**：M2-21（呼吸收敛过程，依 SPEC-3.11 + instanceAlpha 通道，3.1 兼容面守住即复跑）、M2-25（首批 snap 对照，同上）、M3-01（列表行镜像球面 severity，依 SPEC-3.7 分级值未动）、M2-11（结构判据按 3.2 重推为逐切片精确子节点数，非「小常数」软判据）。
+
+**复跑确认（geometry 变更有 raycast 风险，断言本身不回退）**：M2-14（`panel-marker-linkage.spec.ts`，SPEC-7.4 列表↔标记双向 hover/选中联动，BUG-021 复验路径）——判据本身不变，但柱几何由现 SphereGeometry 改 billboard/锥后 raycast 命中行为有实变风险（见 §4.4 陷阱）；须显式复跑联动冒烟，确认真实鼠标移动经 `pick()` raycast 仍能触发 `.event-row--active`；若默认几何拾取不稳，走 §4.4 足印/根部拾取代理选项。
 
 > **e2e 决定性提示（因 §3.5 新增 GlobeScene→setReducedMotion 接线）**：涉动画/呼吸/脉冲存在性的 e2e（M2-10 稳态两帧、M2-21 呼吸坡升、新登辉光稳态）须在 Playwright context 显式钉 `reducedMotion:'no-preference'`，避免 CI 机器 OS 偏好把标记切成瞬切令断言非确定性失败；新登 reduced-motion 场景则钉 `'reduce'`。属 qa 测试 infra，此处仅提示。
 
@@ -180,13 +189,13 @@
 
 ---
 
-## 7. 缺口清单与待 rev 确认的实现读法
+## 7. 缺口清单与实现读法裁决
 
 **spec 未覆盖的对外行为缺口**：无。SPEC-3.7/3.7a/3.7b/3.7c/3.11/3.11a 对光柱形态、辉光、新鲜度、LOD、呼吸、reduced-motion 的对外行为已闭合；本 DP 未新造任何对外值。
 
-**待 rev 确认的实现读法（非 spec 提案，仅请门禁确认不违 spec）**：
-1. **相机档切换的代表柱增减用瞬切、不走呼吸淡入淡出**。依据：SPEC-3.11「呼吸只表达对在屏前态的**数据增量**」+ SPEC-3.11a「无相机驱动微闪」+ D27「呼吸只用于增量」。据此把 LOD 档切换（相机驱动）判为「直接落展示集、不施呼吸」的实现读法。请 rev 确认此读法不与 SPEC-3.11/3.11a 冲突；若 rev 判 LOD 显隐亦属应呼吸的「增量」，则回退本读法、由 dev 让代表柱增减复用呼吸包络（不影响其余切片）。
-2. **`SEVERITY_BASE_SIZE` 改名 `SEVERITY_PILLAR_HEIGHT`**：属实现导出重命名（非对外行为），列此仅提示 qa 单测改引用；若 rev 倾向保留旧名以最小化测试改动，可保名重定义值（0.05/0.09/0.15），语义注释订正即可。二者皆可，请 rev 定夺以统一 qa 改动面。
+**实现读法（非 spec 提案；已经 REV-021 §5 门禁确认，dev 按此实现，不再是待确认项）**：
+1. **相机档切换的代表柱增减用瞬切、不走呼吸淡入淡出**——**REV-021 裁定成立**。依据：SPEC-3.11「呼吸只表达对在屏前态的**数据增量**」+ SPEC-3.11a「无相机驱动微闪」+ D27「呼吸只用于增量」；LOD 档切换是相机驱动、底层事件数据未变的显示集变更，若对档界穿越施加淡入淡出即在缩放过程中构成相机驱动的常驻动画，正面违 SPEC-3.11a，故瞬切是唯一 spec 合规读法（裁决全文见 REV-021 §5 裁决(1)）。dev 据此实现；reduced-motion 开关与此读法无关（两态下 LOD 均瞬切）。
+2. **`SEVERITY_BASE_SIZE` 改名 `SEVERITY_PILLAR_HEIGHT`**——**REV-021 裁定改名**。新值 `{1:0.05,2:0.09,3:0.15}` 为 SPEC-3.7a 已 pin 柱高、非新造，改名属实现导出重命名、非对外行为；裁定理由：旧名语义已实变（「球基础尺寸」自由度→「柱高」spec pin 值），保留旧名会使导出名与实义背离（裁决全文见 REV-021 §5 裁决(2)）。`SEVERITY_BASE_SIZE` 唯一 importer 为 `tests/markers.test.ts`（M2-10 单测），qa 据此改引用即可，见 §3.2。
 
 **遗留风险**：
 - Y≤220 合成封顶在重叠区的达标依赖 LOD 聚合压低重叠（§4.2）；若 testplan 量测显示密集重叠仍越限，属实现调优（降峰/局部 clamp），非 spec 缺陷——登 dev 自查 + qa 量测迭代，必要时回本 DP 补实现提示。
